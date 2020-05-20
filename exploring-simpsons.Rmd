@@ -1,0 +1,1004 @@
+---
+title: "Exploring The Simpsons"
+author: "Elena Geminiani"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::readthedown:
+    css: custom.css
+    highlight: tango
+    thumbnail: false
+    lightbox: true
+    gallery: true
+    code_folding: hide
+editor_options: 
+  chunk_output_type: console
+---
+
+<script>
+   $(document).ready(function() {
+     $head = $('#header');
+     $head.prepend('<img src="Images/simpsons_image.png" style="float: right;width: 170px;"/>')
+   });
+</script>
+
+<style>
+body {
+text-align: justify}
+
+.table thead>tr {
+    background: #DCE5DE;
+    box-shadow: 0 1px 0 #DCE5DE inset;
+}
+</style>
+
+```{r setup, include=FALSE}
+library(knitr)
+library(rmdformats)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = TRUE, dpi = 400)
+#fig.width = 8, fig.height = 5 #cache = TRUE, 
+```
+
+# Introduction 
+&nbsp;
+
+The Simpsons is the world's longest-running animated sitcom, and it was created by the American writer Matt Groening. It is a satirical depiction of the working-class life of the Simpson family, which consists of Homer, Marge, Bart, Lisa, and Maggie. The show is set in the fictional town of Springfield, and it parodies culture, society, and the human condition.
+
+This report illustrates an exploratory and text analysis of the many data sets about the show available at the data science platform [Kaggle](https://www.kaggle.com/prashant111/the-simpsons-dataset) and the \#tidytuesday [Github repository](https://github.com/rfordatascience/tidytuesday/tree/master/data/2019/2019-08-27). Let us start by loading the required packages.
+
+```{r libraries}
+library(tidyverse)
+library(readr)
+library(kableExtra)
+library(treemapify)
+library(gridExtra)
+library(ggpubr)
+library(tidytext)
+library(RColorBrewer)
+library(tm)
+library(topicmodels)
+library(scales)
+library(treemap)
+library(igraph)
+library(ggraph)
+library(ggwordcloud)
+library(udpipe)
+library(ggcorrplot)
+library(GGally)
+theme_set(theme_bw())
+
+show_table <- function(x, caption ="", head = 50, scroll = FALSE, full.width = FALSE, 
+                       digits = 2, col.names = NA, align = NULL){
+  table <- x %>%
+    head(head) %>%
+    kable(caption = caption, digits = digits, col.names = col.names, align = align,
+          format.args = list(decimal.mark = ".", big.mark = ",")) %>%
+    kable_styling("striped", position = "left", full_width = full.width)
+    if(scroll){
+      table <- table %>%
+        scroll_box(width = "100%", height = "500px")
+    }
+  return(table)
+}
+
+firstup <- function(x) {
+  substr(x, 1, 1) <- toupper(substr(x, 1, 1))
+  x
+}
+
+colors  <- c('#fed41d', '#0094c7', '#f14e28')
+palette <- c("#acba81ff", "#2a9430ff", "#ae6b1bff","#024CF0", "#28536bff", "#68aedeff", "#8928e8ff",
+             "#f25d30ff", "#d63d2aff", "orchid", "#b49ba0ff", "darkorange", "#ef4d8bff", "#ffc510ff",
+             "lightsalmon1", "azure4", "aquamarine3")
+```
+
+The five data sets we will be working with are `simpsons_characters.csv`, `simpsons_locations.csv`, `simpsons_script_lines.csv`, `simpsons_episodes.csv`, and `simpsons-guests.csv`. 
+
+```{r read_data}
+characters <- read_delim("Data/simpsons_characters.csv", delim = ",")
+locations  <- read_delim("Data/simpsons_locations.csv", delim = ",")
+episodes   <- read_delim("Data/simpsons_episodes.csv", delim = ",")
+dialogues  <- read_delim("Data/simpsons_script_lines.csv", delim = ",")
+guests     <- read_delim("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-08-27/simpsons-guests.csv", delim = "|", quote = "")
+```
+
+# Pre-processing {.tabset  .tabset-pills}
+
+Before starting with the actual analysis, it is convenient to perform the following pre-processing operations.
+
+* `characters` data set: the levels of `gender` are recoded as `Male`, `Female`, and `Unknown`. 
+* `dialogues` data set: we retain the speaking lines and create identifiers for the row number.
+* `episodes` data set: we create a variable denoting the episode number: the format of the episode number follows the rules described  [here](https://en.wikipedia.org/wiki/List_of_The_Simpsons_guest_stars) (i.e., the first number refers to the order it aired during the entire series, and the second number refers to the episode number within its season). We also filter the `episodes` until season 27, since the information about season 28 is partial (there are only 4 episodes).
+* `guests` data set: the Movie seasons are excluded, and a logical variable `self` is created, which is equal to `TRUE` if a given guest star has played themselves in a particular episode, and `FALSE` if they have instead voiced a regular character. Some additional recoding on specific character names is carried out.
+
+```{r processing}
+characters <- characters %>% 
+  mutate(gender = fct_explicit_na(gender, na_level = "Unknown"),
+         gender = fct_recode(gender, Male = "m", Female = "f"))
+
+dialogues  <- dialogues %>% 
+  filter(speaking_line) %>%
+  mutate(line_number = row_number()) %>%
+  select(line_number, episode_id, number, role = raw_character_text,
+         location = raw_location_text, line = spoken_words)
+
+episodes   <-  episodes %>% 
+  na.omit() %>%
+  mutate(part1 = sprintf("%03d", id), 
+         number_in_season = sprintf("%02d", number_in_season)) %>%
+  unite("part2", c(season, number_in_season), sep = "", remove = FALSE) %>%
+  unite("number", c(part1, part2), sep = "–", remove = FALSE) %>%
+  filter(season <= 27) %>%
+  select(season, number, episode_id = number_in_series, prod_code = production_code, 
+         year = original_air_year, title, rating = imdb_rating, 
+         votes = imdb_votes, views, us_views = us_viewers_in_millions)
+
+guests <- guests %>%
+  filter(!season %in% "Movie") %>%
+  mutate(season = parse_number(season)) %>%
+  separate_rows(role, sep = ";\\s+") %>%
+  mutate(self = str_detect(role, "self|selves"),
+         role = ifelse(role == "Edna Krabappel", "Edna Krabappel-Flanders", role),
+         role = ifelse(role == "Fit Tony", "Fat Tony", role)) %>%
+  rename(title = episode_title, prod_code = production_code)
+```
+
+We can now look at the pre-processed data sets `characters`, `locations`, `episodes`, `dialogues`, and `guests`.
+
+## Characters
+```{r}
+show_table(characters, caption = "Characters data set (first 50 rows)", scroll = TRUE)
+```
+
+## Locations
+```{r}
+show_table(locations, caption = "Location data set (first 50 rows)", scroll = TRUE)
+```
+
+## Episodes
+```{r}
+show_table(episodes, caption = "Episodes data set (first 50 rows)", scroll = TRUE)
+```
+
+## Dialogues
+```{r}
+show_table(dialogues, caption = "Dialogues data set (first 50 rows)", scroll = TRUE)
+```
+
+## Guests
+```{r}
+show_table(guests, caption = "Guests data set (first 50 rows)", scroll = TRUE)
+```
+
+# {-}
+
+Let us join into `dialogues` the information contained in both `characters` and `episodes`. This will allow us to know, for instance, the gender of the characters who talk the most, and the season of each episode. Notice that since `dialogues` terminates at episode 568 (episode 16 of season 26), the joined data set will also terminate at episode 568, even if `episodes` actually ends at episode 596 (episode 22 of season 27). Because the join for episodes 160, 161, 173 produced NAs, we manually inserted their season number (8).
+
+```{r joining1}
+dialogues <- dialogues %>%
+  left_join(characters, by = c("role" = "name")) %>%
+  mutate(gender = fct_explicit_na(gender, na_level = "Unknown")) %>%
+  left_join(episodes[,c("season", "episode_id")], by = "episode_id")
+
+dialogues <- dialogues %>%
+  mutate(season = ifelse(is.na(season), 8, season)) %>%
+  select(line_number, season, number = episode_id, location, role, gender, line)
+```
+
+We now join into `episodes` the information from `guests`. This will be useful to get, for instance, the guest star name of each episode (if any), and the role they played. Since `episodes` terminates at episode 596 (last episode of season 27), the joined data set also terminates at episode 596, even if `guests` terminates at episode 662 (episode 23 of season 30). 
+
+```{r joining2}
+episodes <- episodes %>%
+  left_join(guests, by = c("number", "season", "prod_code", "title")) %>%
+  mutate(guest = ifelse(!is.na(role), TRUE, FALSE))
+```
+
+Lastly, we tidy the `dialogues `, which puts the speaking lines into a one-word-per-row format.
+
+```{r tidy}
+dialogues.tidy <- dialogues %>%
+  unnest_tokens(word, line)
+```
+
+<img style="float: right;width: 300px;" src="Images/characters.jpg">
+&nbsp;
+
+# Characters {.tabset  .tabset-pills}
+
+<div style="clear: right">
+The Simpsons is known for its vast ensemble of leading and supporting characters. The `characters` data set collects the names of 6722 characters that appeared throughout the seasons. In 95% of the cases, the gender of the character is not recorded. However, this is not problematic since those characters are not particularly relevant to the development of the show, as they only account for about 15% of the whole dialogues.
+</div> 
+
+## Frequency distribution
+
+```{r gender_frequency}
+frequency_table <- function(df, group_var, align = NULL, prop = TRUE, head = nrow(df),
+                            caption = ""){
+  group_var <- enquo(group_var)
+  col.names <- c(firstup(as_label(group_var)), "Frequency")
+  
+  table <- df %>%
+    group_by(!! group_var) %>%
+    summarize(n = n()) %>%
+    arrange(desc(n))
+  
+  if(prop){
+    col.names <- c(col.names, "Proportion")
+    table <- table %>%
+      mutate(prop = n / sum(n), 
+             prop = percent(prop)) %>%
+      arrange(desc(prop))
+  }
+  
+  table %>%
+    show_table(col.names = col.names, align = align, head = head, caption = caption)
+}
+
+characters %>%
+  frequency_table(gender, align = c("l", "r", "r"),
+                  caption = "The gender of the Simpsons characters throughout 26 seasons")
+```
+
+## Contributions to dialogues
+
+```{r percentage_gender}
+dialogues.tidy %>%
+  frequency_table(gender, align = c("l", "r", "r"),
+                  caption = "How each gender contributes to the dialogues of 26 seasons")
+```
+
+# {-}
+
+The Simpsons is characterized by a marked gender imbalance, which is also reflected in the show's writing staff. More than 75% of the characters with recorded gender are male. The only female leading characters are Marge and Lisa Simpson. In contrast, among the supporting cast, we find Edna Krappabel-Flanders (the teacher at Springfield Elementary School), and Marge's older sisters, the twins Selma and Patty Bouvier.
+
+```{r characters_plots, fig.height=6, fig.width=10}
+lollipop <- function(df, x, y, index = c(1:5), title = ""){
+  x <- enquo(x)
+  y <- enquo(y)
+  
+  df %>%
+    count(!! x, !! y, sort = TRUE) %>%
+    slice(index) %>%
+    mutate(role = fct_reorder(!! x, n)) %>%
+    ggplot(aes(role, n, fill = !! y)) +
+    geom_segment(aes(role, xend = role, y = 0, yend = n, color = !! y), size = 0.8, show.legend = FALSE) +
+    geom_point(aes(color = !! y), size = 4, alpha = 0.6) +
+    coord_flip() +
+    labs(x = "", y = "Number of spoken words in 26 seasons", title = title) +
+    scale_fill_manual(name  = firstup(as_label(y)),  values = rev(colors[2:3])) +
+    scale_color_manual(name = firstup(as_label(y)),  values = rev(colors[2:3])) +
+    scale_y_continuous(labels = comma)
+}
+
+plot.top.chars <- dialogues.tidy %>%
+  lollipop(x  = role, y = gender, index = c(1:10), title = "Top 10 Simpson leading characters")
+plot.supporting.chars <- dialogues.tidy %>%
+  lollipop(x  = role, y = gender, index = c(11:35), title = "The Simpsons supporting cast")
+
+ggarrange(plot.top.chars, plot.supporting.chars, nrow = 1, common.legend = TRUE, legend="bottom",
+          widths = c(0.95, 1.05))
+```
+
+<!-- <img style="float: right;width: 250px;" src="Images/locations.png"> -->
+
+<!-- # Locations -->
+
+<!-- The Simpsons show is mainly setted in Springfield, a fictional town acting as a complete universe in which the characters can explore the issues faced by modern society. Although the `location` data set reports 4459 distinct locations, most of the dialogues actually take place in way less settings. -->
+
+<!-- &nbsp; -->
+
+<!-- In the following treemap, we depicts the 20 most common locations (that is, where the characters talked the most). At the top, there is The Simpson home, followed by Springfield Elementary School, and Moe's Tavern. The majority of these locations denote indoor settings. -->
+
+<!-- &nbsp; -->
+
+<!-- ```{r common_locations, fig.height = 8, out.width="600", out.height="600"} -->
+<!-- dialogues.tidy %>% -->
+<!--   count(location, sort = TRUE) %>% -->
+<!--   head(20) %>% -->
+<!--   add_column("Space" = c(rep("Indoor", 8), rep("Outdoor", 3), rep("Indoor", 3), "Outdoor", -->
+<!--                          rep("Indoor", 3), "Outdoor", "Indoor")) %>% -->
+<!--   mutate(Space = as.factor(Space)) %>% -->
+<!--   ggplot(aes(area = n, label = location, fill = Space, subgroup = location)) + -->
+<!--   geom_treemap( alpha = 0.8) + -->
+<!--   geom_treemap_subgroup_border(color = "black", size = 0.85) + -->
+<!--   geom_treemap_text(place = "centre", size = 13, -->
+<!--                     grow = FALSE, reflow = TRUE) + -->
+<!--   scale_fill_manual(values = c("#62AF67ff", "#989DCDff")) + -->
+<!--   theme(legend.position = "bottom") + -->
+<!--   labs(title = "Top 20 locations", -->
+<!--        subtitle = "Most dialogues take place at the Simpson home, and indoor.") -->
+<!-- ``` -->
+
+<!-- Let us select the 6 most recurrent locations, and explore which characters have the most dialogues within these locations. -->
+
+<!-- * **Simpson home**: it is the house of the Simpsons family, and the most talkative characters here are of course the family members. -->
+
+<!-- * **Springfield Elementary School**: it is the local school on The Simpsons, attended by Bart and Lisa Simpson. Besides the two of them, the other main characters are the principal Skinner, the superintendent Chalmers and the teacher Edna. -->
+
+<!-- * **Moe's Tavern**: it is local bar in Springfield, and the main dialogues take place between the owner Moe and his guests, that is, Homer and his friends Lenny, Carl and Barney. -->
+
+<!-- * **Springfield Nuclear Power Plant**: the main characters here are Mr. Burns (the owner of the plant), Smithers (his executive assistant), and the employees Homer, Lenny and Carl. -->
+
+<!-- * **Kwik-E-Mart**: it is a convenience store run by Apu. Besides him, the other main characters include the member of the Simpson family. -->
+
+<!-- * **First Church of Springfield**: it is the main religious house in Springfield, and the dialogues here mainly occurr between the Reverend, the Simpson family, and Ned, their very religious next-door neighbor. -->
+
+<!-- ```{r common_chars_by_location, fig.width=11, fig.height=7} -->
+<!-- top.locations <- dialogues.tidy %>% -->
+<!--   count(location, word, sort = TRUE) %>% -->
+<!--   group_by(location) %>% -->
+<!--   summarize(n = n()) %>% -->
+<!--   arrange(desc(n)) %>% -->
+<!--   top_n(6, n) %>% -->
+<!--   pull(location) -->
+
+<!-- set.seed(2) -->
+<!-- dialogues.tidy %>% -->
+<!--   filter(location %in% top.locations) %>% -->
+<!--   count(role, location, sort = TRUE) %>% -->
+<!--   group_by(location) %>% -->
+<!--   top_n(5, n) %>% -->
+<!--   ungroup() %>% -->
+<!--   mutate(location = fct_reorder(location, -n, sum)) %>% -->
+<!--   ggplot(aes(reorder_within(role, n, location), n, fill = fct_reorder(role, n, sum))) + -->
+<!--   geom_col(show.legend = FALSE) + -->
+<!--   coord_flip() + -->
+<!--   facet_wrap(~location, scales = "free") + -->
+<!--   scale_fill_manual(values = sample(palette)) + -->
+<!--   labs(title = "Who speaks the most where?", x = "", y = "")  + -->
+<!--   scale_y_continuous(labels = comma) + -->
+<!--   theme(panel.spacing = unit(0.5, "lines")) + -->
+<!--   scale_x_reordered() -->
+<!-- ``` -->
+
+<!-- In the following plot, we depict the distribution of the total number of words per season pronounced by the four Simpsons family members through density plots. -->
+
+<!-- ```{r nb_lines_characters, fig.height=6, out.width="500", out.height="600"} -->
+<!-- Top20Chars <- dialogues.tidy %>% -->
+<!--   count(role, word, sort = TRUE) %>% -->
+<!--   distinct(role) %>% -->
+<!--   head(20) %>% -->
+<!--   pull(role) -->
+
+<!-- dialogues.tidy %>% -->
+<!--   filter(role %in% Top20Chars[1:4]) %>% -->
+<!--   group_by(season, role) %>% -->
+<!--   summarize(nwords = n()) %>% -->
+<!--   ungroup() %>% -->
+<!--   mutate(role = reorder(role, -nwords)) %>% -->
+<!--   ggplot(aes(x=nwords, fill = fct_rev(role), color = fct_rev(role))) + -->
+<!--   geom_density(size = 0.85, alpha = 0.65)  + -->
+<!--   scale_x_continuous(labels = comma) + -->
+<!--   labs(x = "Number of words per season", y = "Density", -->
+<!--        title = "Distribution of the total number of words per season") + -->
+<!--   guides(fill = guide_legend(reverse = TRUE), color = guide_legend(reverse = TRUE)) + -->
+<!--   scale_fill_manual(name = "Character", values = rev(palette[c(8,14,6,1)])) + -->
+<!--   scale_color_manual(name = "Character", values = rev(palette[c(8,14,6,1)])) + -->
+<!--   theme(legend.position = "bottom") -->
+<!-- ``` -->
+
+<!-- <img style="float: right;width: 120px;" src="Images/tv.jpg"> -->
+<!-- &nbsp; -->
+
+<!-- # Episodes -->
+<!-- <!-- ![ ](imdb.png){#id .class width=30% height=20%} --> -->
+
+<!-- The `episodes` data set contains information about the IMDB rating of each episodes, the number of votes it received, and the number of TV views in the United States. -->
+
+<!-- The following plots show the trend of the ratings, votes and TV views for each episode, as well as averaged by season. We notice an overall downward for all three indicators. Older seasons are the most appreciated, most rated, and most viewed. As a matter of fact, the Simpsons show received acclaim throughout its first nine or ten seasons, which are generally considered its "Golden Age", but was criticized for a perceived [decline in quality](https://en.wikipedia.org/wiki/The_Simpsons#Perception_of_declining_quality) over the years. -->
+
+<!-- With respect to the downward trend observed for the TV views though, we should acknowledged that the availability in more recent years of a variety of TV channels, as well as Internet streaming platforms has caused a drop in the views not only for The Simpsons, but for many other network TV shows. -->
+
+<!-- ```{r loess, fig.height = 3.6, fig.width=9} -->
+<!-- scatter_plot <- function(df, x, y, xlab = "Original air date", ylab, title, -->
+<!--                       breaks = NULL, limits = NULL, labels  = comma){ -->
+<!--   x <- enquo(x) -->
+<!--   y <- enquo(y) -->
+
+<!--   p <- df %>% -->
+<!--     ggplot(aes(!! x, !! y)) + -->
+<!--     geom_point(size = 0.8) + -->
+<!--     geom_smooth(method = "loess", formula = "y ~ x") + -->
+<!--     labs(x = xlab, y = ylab, title = title) -->
+<!--   if(!is.null(breaks)){ -->
+<!--     p <- p + -->
+<!--     scale_y_continuous(labels = labels, breaks = breaks, limits = limits) -->
+<!--   }else{ -->
+<!--     p <- p + -->
+<!--     scale_y_continuous(labels = labels, limits = limits) -->
+<!--   } -->
+<!--   p -->
+<!-- } -->
+
+<!-- trend.rating <- episodes %>% -->
+<!--   scatter_plot(year, rating, ylab = "Rating score", title = "IMDB ratings", -->
+<!--                breaks = seq(0, 10, 2), limits = c(0, 10)) -->
+
+<!-- trend.votes <- episodes %>% -->
+<!--   scatter_plot(year, votes, ylab = "Number of votes", title = "IMDB voters", -->
+<!--                limits = c(0, 4000)) -->
+
+<!-- trend.views <- episodes %>% -->
+<!--   scatter_plot(year, us_views, ylab = "Number of US viewers", title = "TV views in the US", -->
+<!--                limits = c(0, 35), labels = unit_format(unit = "", scale = 1e+6, big.mark = ",")) -->
+
+<!-- grid.arrange(trend.rating, trend.votes, trend.views, nrow = 1, ncol = 3, widths = c(0.95, 0.97, 1.08)) -->
+<!-- ``` -->
+
+
+<!-- ```{r line_plots, fig.height=4, fig.width=9} -->
+<!-- line_plot <- function(data, x, y, xlab = "Season", ylab, title, sub, -->
+<!--                       limits = NULL, breaks = NULL, labels = comma){ -->
+
+<!--   x <- enquo(x) -->
+<!--   y <- enquo(y) -->
+
+<!--   p <- data %>% -->
+<!--     ggplot(aes(!! x, !! y)) + -->
+<!--     geom_line(size = 1.2, color = "#8d99ae") + -->
+<!--     geom_point(shape=21, color=colors[2], fill=colors[2], size=1) + -->
+<!--     scale_x_continuous(breaks = seq(1, 27, 4)) + -->
+<!--     labs(x = xlab, y = ylab, title = title, subtitle = sub) + -->
+<!--     theme(plot.subtitle=element_text(size=9)) -->
+<!--     if(!is.null(breaks)){ -->
+<!--      p <- p + -->
+<!--        scale_y_continuous(labels = labels, breaks = breaks, limits = limits) -->
+<!--     }else{ -->
+<!--      p <- p + -->
+<!--        scale_y_continuous(labels = labels, limits = limits) -->
+<!--     } -->
+<!--   p -->
+<!-- } -->
+
+<!-- episodes_byseason <- episodes %>% -->
+<!--   group_by(season) %>% -->
+<!--   summarize(avg_rate  = mean(rating), -->
+<!--             avg_vote  = mean(votes), -->
+<!--             avg_views = mean(us_views)) -->
+
+<!-- plot.rating <- episodes_byseason %>% -->
+<!--   line_plot(season, avg_rate, ylab = "Rating score",  title = "IMDB ratings", -->
+<!--             sub = "Averaged by season \nOlder seasons are the most appreciated.", -->
+<!--             breaks = seq(0, 10, 2), limits = c(0,10)) -->
+
+<!-- plot.vote <- episodes_byseason %>% -->
+<!--   line_plot(season, avg_vote, ylab = "Number of voters", title = "IMDB voters", -->
+<!--             sub = "Averaged by season \nOlder seasons are the most rated.", -->
+<!--             limits = c(0, 2000)) -->
+
+<!-- plot.view <- episodes_byseason %>% -->
+<!--   line_plot(season, avg_views, ylab = "Number of viewers", title = "TV views in the US", -->
+<!--             sub = "Averaged by season \nOlder seasons are the most viewed.", -->
+<!--             labels = unit_format(unit = "", scale = 1e+6, big.mark = ","), -->
+<!--             limits = c(0, 30)) -->
+
+<!-- grid.arrange(plot.rating, plot.vote, plot.view, nrow = 1, -->
+<!--              widths = c(0.95, 0.97, 1.08)) -->
+<!-- ``` -->
+
+<!-- The following plot shows the distrbutions and pairwise-relationships between IMDB ratings, IMDB votes, and TV views in the US. -->
+
+<!-- ```{r ggpairs, fig.height=6.5} -->
+<!-- line_smooth <- function(data, mapping, method="loess", ...){ -->
+<!--   p <- ggplot(data = data, mapping = mapping) + -->
+<!--     geom_point(...) + -->
+<!--     geom_smooth(method=method) -->
+<!--   p -->
+<!-- } -->
+<!-- bi_density_plot <- function(data, mapping, palette = 4, ...){ -->
+<!--   p <- ggplot(data, mapping = mapping) + -->
+<!--     # geom_point(...) + -->
+<!--     stat_density_2d(aes(fill = stat(level)), geom = "polygon") + -->
+<!--     scale_fill_distiller(palette = palette, direction = 1) -->
+<!--     # scale_fill_viridis_c(option = "G") -->
+<!--   p -->
+<!-- } -->
+
+<!-- episodes %>% -->
+<!--   select("IMDB rating" = rating, "IMDB votes" = votes, "TV views in US (millions)" = us_views) %>% -->
+<!--   ggpairs(upper = list(continuous = wrap(bi_density_plot, palette = 1, size = 0.2)), -->
+<!--           diag  = list(continuous = wrap("barDiag", fill = "#8d99ae", bins = 27)), -->
+<!--           lower = list(continuous = wrap(line_smooth, color = "black", size = 0.2))) + -->
+<!--   ggtitle(label = "Pairwise variable comparisons") -->
+<!-- ``` -->
+
+<!-- As excepted, the graphical representation of the correlation matrix of `episodes` shows a strong inverse relation between the episode number and the ratings, the votes, and the views, indicating that more recent seasons are characterized by a decrease in those performance indicators. These indicators are also strongly correlated to one another, meaning that when one of those ones increases, so do the other two. -->
+
+<!-- ```{r corrmat, fig.height = 4, out.width=650} -->
+<!-- episodes %>% -->
+<!--   select("Episode number" = episode_id, "IMDB rating" = rating, -->
+<!--          "IMDB votes" = votes, "TV views in US" = us_views) %>% -->
+<!--   cor() %>% -->
+<!--   ggcorrplot(type = "lower", colors = c("#6D9EC1", "white", "#E46726"), outline.col = "white", -->
+<!--              legend.title = "Correlation", lab = TRUE, ggtheme = ggplot2::theme_light()) + -->
+<!--   labs(title = "Correlation matrix") -->
+<!-- ``` -->
+
+
+<!-- <img style="float: right;width: 200px;" src="Images/rowling.png"> -->
+
+<!-- # Guest stars {.tabset  .tabset-pills} -->
+
+<!-- In addition to the show's regular cast of voice actors, celebrity guest stars have been a staple of The Simpsons, since its first season. Guest voices have come from a wide range of professions, including actors, athletes, authors, musicians, artists, politicians and scientists. -->
+
+<!-- The `guests` data set contains information about the guest stars that took part in every episode, and the role they played. Let us have a look at the most recurring guest voices and roles. -->
+
+<!-- ## Most frequent guest stars -->
+
+<!-- The most frequent role voiced by guest stars is the teacher Edna Krabappel played by Marcia Wallace, followed by the actor Troy McClure played by Phil Hartman, and the gangster Fat Tony played by Joe Mantegna. -->
+
+<!-- ```{r guest_roles_tab1} -->
+<!-- guests %>% -->
+<!--   count(guest_star, role, sort = TRUE) %>% -->
+<!--   show_table(head = 10, caption = "Frequency table (first 10 lines)", -->
+<!--              col.names = c("Guest star", "Role", "Frequency")) -->
+<!-- ``` -->
+
+<!-- ## Most frequent roles -->
+
+<!-- The most frequent roles played by guest stars are either themselves, or some supporting characters. -->
+
+<!-- ```{r guest_roles_tab2} -->
+<!-- guests %>% -->
+<!--   frequency_table(role, head = 10, prop = FALSE, caption = "Frequency table (first 10 lines)") -->
+<!-- ``` -->
+
+<!-- # {-} -->
+
+<!-- The next plot shows the total number of guest star appeareances over seasons In the show's early years most guest stars voiced original characters, but as the show has continued the number of those appearing as themselves has slightly increased. -->
+
+<!-- ```{r guest_roles2, fig.height=5, fig.width=6, out.width=500} -->
+<!-- guests %>% -->
+<!--   mutate(self = factor(self, levels = c(FALSE, TRUE), -->
+<!--                        labels=c("Playing an original character", "Playing themselves"))) %>% -->
+<!--   group_by(season, self) %>% -->
+<!--   summarize(n = n()) %>% -->
+<!--   ggplot(aes(season, n, color = self)) + -->
+<!--   geom_line(size = 1.2) + -->
+<!--   scale_color_manual(name = "Guest star role", values = c("#62AF67ff", "#989DCDff")) + -->
+<!--   scale_x_continuous(breaks = seq(0, 30, 2)) + -->
+<!--   theme(legend.position = "bottom") + -->
+<!--   labs(x = "Season", y = "Total number of guest star appearences", -->
+<!--        title = "The number of guest star appearances over time") -->
+<!-- ``` -->
+
+<!-- Let us explore the guest stars who played themselves in multiple episodes. The most frequent guest star is the physicist and cosmologist Stephen Hawking with 4 appearences in 4 seasons, followed by the -->
+<!-- the comic-book writer Stan Lee, the filmmaker Ken Burns, and the actor Gary Coleman with 3 appearances. The gender imbalance in the original characters also appears among the guest star appearances, with only 5 women playing themselves twice over 30 seasons. -->
+
+<!-- ```{r plot_guests, fig.height=8, fig.width=8, out.width=550} -->
+<!-- guests %>% -->
+<!--   filter(self) %>% -->
+<!--   count(guest_star, sort = TRUE) %>% -->
+<!--   filter(n > 1) %>% -->
+<!--   add_column(gender = c(rep("Male", 7), "Female", rep("Male", 7), rep("Female", 2), "Male", -->
+<!--                         "Female", rep("Male", 14), rep("Female", 1), rep("Male", 2))) %>% -->
+<!--   mutate(guest_star = fct_reorder(guest_star, n)) %>% -->
+<!--   ggplot(aes(guest_star, n, fill = gender)) + -->
+<!--   geom_segment(aes(guest_star, xend = guest_star, y = 0, yend = n, color = gender), -->
+<!--                size = 0.8, show.legend = FALSE) + -->
+<!--   geom_point(aes(color = gender), size = 4, alpha = 0.6) + -->
+<!--   coord_flip() + -->
+<!--   theme(legend.position = "bottom") + -->
+<!--   labs(x = "", y = "Number of appearences", -->
+<!--        title = "Who has played themselves in multiple Simpsons episodes?") + -->
+<!--   scale_fill_manual(name = "Gender", values = rev(colors[2:3])) + -->
+<!--   scale_color_manual(name = "Gender", values = rev(colors[2:3])) -->
+
+<!-- ``` -->
+
+<!-- It would be interesting to explore whether there is a difference in terms of ratings, votes and TV views for the episodes starring guest stars playing themselves versus the episodes with only the original characters. -->
+
+<!-- From the following table and plot, the episodes with guests starring themselves have on average received relatively lower IMDB ratings, votes and TV views than the episodes without any guest star. -->
+
+<!-- ```{r guest_summaries} -->
+<!-- episodes %>% -->
+<!--   filter(is.na(self) | self == TRUE) %>% -->
+<!--   group_by(guest) %>% -->
+<!--   summarize(avg_rating = mean(rating), -->
+<!--             avg_votes  = mean(votes), -->
+<!--             avg_views  = mean(us_views)) %>% -->
+<!--   show_table(col.names = c("Guest star playing themselves", "IMDB rating", -->
+<!--                            "IMDB votes", "TV views in US (millions)"), -->
+<!--              align = c("l", rep("r", 3)), caption = "Average performance indicators") -->
+<!-- ``` -->
+
+
+<!-- ```{r guests_violin, fig.height=4, fig.width=9} -->
+<!-- plot_violin <- function(df, x, y, z, ylab, title = "", limits = NULL, -->
+<!--                         breaks = NULL, labels = comma){ -->
+
+<!--   x <- enquo(x) -->
+<!--   y <- enquo(y) -->
+<!--   z <- enquo(z) -->
+
+<!--   data_summary <- function(x) { -->
+<!--     m <- mean(x) -->
+<!--     ymin <- m-sd(x) -->
+<!--     ymax <- m+sd(x) -->
+<!--     return(c(y=m,ymin=ymin,ymax=ymax)) -->
+<!--   } -->
+
+<!--   p <- df %>% -->
+<!--     filter(is.na(!! x) | !! x == TRUE) %>% -->
+<!--     mutate(y = as.factor(!! y)) %>% -->
+<!--     group_by(y) %>% -->
+<!--     ggplot(aes(y, !! z, fill = y)) + -->
+<!--     geom_violin(show.legend = FALSE) + -->
+<!--     scale_fill_manual(values = colors[2:3]) + -->
+<!--     scale_x_discrete(labels=c("FALSE"="No Guest Star","TRUE"="Guest Star")) + -->
+<!--     labs(x = "", y = ylab, title = title)  + -->
+<!--     stat_summary(fun.data = data_summary, geom = "pointrange", color = "black", -->
+<!--                 show.legend = FALSE) -->
+
+<!--   if(!is.null(breaks)){ -->
+<!--      p <- p + -->
+<!--        scale_y_continuous(labels = labels, breaks = breaks, limits = limits) -->
+<!--     }else{ -->
+<!--      p <- p + -->
+<!--        scale_y_continuous(labels = labels, limits = limits) -->
+<!--     } -->
+<!--   p -->
+<!-- } -->
+
+<!-- plot.guest.rating <- episodes %>% -->
+<!--   plot_violin(x = self, y = guest, z = rating, ylab = "Rating", title = "IMDB ratings", -->
+<!--               limits = c(0, 10), breaks = seq(0, 10, 2)) -->
+
+<!-- plot.guest.vote <- episodes %>% -->
+<!--   plot_violin(x = self, y = guest, z = votes, ylab = "Votes", title = "IMDB votes", -->
+<!--               labels = comma, limits = c(0, 4000)) -->
+
+<!-- plot.guest.views <- episodes %>% -->
+<!--   plot_violin(x = self, y = guest, z = us_views, ylab = "Views", title = "TV views in the US", -->
+<!--               labels = unit_format(unit = "", scale = 1e+6, big.mark = ","), -->
+<!--               limits = c(0, 35)) -->
+
+<!-- grid.arrange(plot.guest.rating, plot.guest.vote, plot.guest.views, nrow = 1, -->
+<!--              widths = c(0.95, 0.97, 1.08)) -->
+<!-- ``` -->
+
+<!-- Let us explore the number of lines associated to each role that every guest star has played. We consider `guests` up to season 27, since this the last season appearing in `dialogues`. The guest stars with the highest number of lines per episodes are actually the ones having the role of the narrator, and generally did not play themselves. There is only one exception of a guest character playing themselves with many lines, which is Lady Gaga. -->
+
+<!-- ```{r processing_guest_roles} -->
+<!-- guests <- guests %>%  -->
+<!--   mutate(role = ifelse(self, guest_star, role)) -->
+
+<!-- guests_summarized <- guests %>% -->
+<!--   filter(season <= 27) %>% -->
+<!--   group_by(guest_star, role, self) %>% -->
+<!--   summarize(nb_episodes  = n(), -->
+<!--             first_season = min(season), -->
+<!--             last_season  = max(season)) -->
+
+<!-- guest_roles <- guests_summarized %>% -->
+<!--   inner_join(dialogues %>% -->
+<!--                count(role, sort = TRUE, name = "nb_lines"),  -->
+<!--              by = "role") %>% -->
+<!--   mutate(lines_per_episode = nb_lines/ nb_episodes) -->
+
+<!-- guest_roles %>% -->
+<!--   arrange(desc(lines_per_episode)) %>% -->
+<!--   show_table(head = 15, col.names = c("Guest star", "Role", "Playing themselves",  -->
+<!--                                       "Number of episodes", "First season", "Last season", -->
+<!--                                       "Number of lines", "Number of lines per episode"), -->
+<!--              align = c("l", "l", rep("r", 6))) -->
+<!-- ``` -->
+
+<!-- From the following plot, it seems that many guest stars appeared in only one episode, and we notice a skewed distribution of the number of lines per episode. Guest stars playing themselves tend to have fewer lines than the ones playing an actual character on the show.  -->
+
+<!-- ```{r histogram_roles, fig.height=6, out.width="600"} -->
+<!-- guest_roles %>% -->
+<!--   mutate(self = ifelse(self, "Playing Themselves", "Playing a Character")) %>% -->
+<!--   ggplot(aes(lines_per_episode)) + -->
+<!--   geom_histogram(aes(fill = self), binwidth = 2, center = 1, show.legend = FALSE) + -->
+<!--   facet_wrap(~ self, ncol = 2) + -->
+<!--   scale_fill_manual(values = c("#62AF67ff", "#989DCDff")) + -->
+<!--   labs(x = "Average number of lines per episode", y = "Frequency", -->
+<!--        subtitle = "Most guest stars, especially those playing themselves, have relatively few lines per episode") -->
+<!-- ``` -->
+
+<!-- # Text analysis -->
+
+<!-- Let us do some text analysis on the `dialogues` data set. In this case, the episodes of the show will act as the documents of our corpus. -->
+
+<!-- ## Word and document frequency -->
+
+<!-- Let us first remove the stop words from `dialogues`. -->
+
+<!-- ```{r stop_words} -->
+<!-- dialogues.tidy <- dialogues.tidy %>% -->
+<!--   anti_join(stop_words, by = "word") -->
+<!-- ``` -->
+
+<!-- Let us find the most frequent words. By choosing a distinct combination of role, word, and line number we are preventing from counting the same word from the same line multiple times. It seems that the most recurrent words are for characters addressing each other.  -->
+
+<!-- ```{r word_counts} -->
+<!-- dialogues.summarized <- dialogues.tidy %>% -->
+<!--   distinct(role, line_number, word) %>% -->
+<!--   count(role, word, sort = TRUE) -->
+
+<!-- dialogues.summarized %>% -->
+<!--   show_table(head = 15, col.names = c("Character", "Word", "Frequency"), -->
+<!--              align = c("l", "r", "r")) -->
+<!-- ``` -->
+
+<!-- Let us now compute the term frequency (tf),  the inverse document frequency (idf), and their joint measure tf-idf, which finds the important words for each document, but not too common in the other documents. In this context, this translates to finding the peculiar words of a certain character, that are not generally used by the other characters. -->
+
+<!-- ```{r specificity} -->
+<!-- role.specificity <- dialogues.summarized %>% -->
+<!--   group_by(role) %>% -->
+<!--   mutate(total_words = sum(n)) %>% -->
+<!--   ungroup() %>% -->
+<!--   bind_tf_idf(word, role, n) %>% -->
+<!--   arrange(desc(tf_idf)) -->
+<!-- ``` -->
+
+<!-- We can use the tf-idf as a catchphrase detector. We filter for those characters with many dialogues (specifically, more than 500 words), and keep one row for each character (to find a single peculiar word for every role). The following plot shows the words with the highest tf-idf with the associated characters. For some characters, the peculiar word is the name of the character they usually talk to (e.g., Smithers saying 'sir' or Agnes Skinner saying 'Seymour'), for others it is the word they use to introduce themselves (e.g., Troy McClure saying 'I'm Troy McClure'), or as recurring sounds (e.g., the Captain going 'Arrr' or Nelson 'haw'). -->
+
+<!-- ```{r arrr, fig.height=7.5, out.width="600"} -->
+<!-- role.specificity %>% -->
+<!--   filter(total_words >= 500) %>% -->
+<!--   distinct(role, .keep_all = TRUE) %>% -->
+<!--   mutate(role_word = paste0(role, ": ", word)) %>% -->
+<!--   head(20) %>% -->
+<!--   mutate(role_word = fct_reorder(role_word, tf_idf)) %>% -->
+<!--   ggplot(aes(role_word, tf_idf)) + -->
+<!--   geom_segment(aes(role_word, xend = role_word, y = 0, yend = tf_idf), -->
+<!--                color = "#8d99ae", size = 0.8, show.legend = FALSE) + -->
+<!--   geom_point(color = "#8d99ae", size = 4, alpha = 0.6) + -->
+<!--   coord_flip() + -->
+<!--   labs(title = "Using TF-IDF as a Simpsons catchphrase detector", -->
+<!--        subtitle = "Top 20 of the 53 characters speaking at least 500 words in 27 seasons.", -->
+<!--        x = "", y = "TF-IDF") -->
+<!-- ``` -->
+
+<!-- ## Bigrams Analysis -->
+
+<!-- Let us explore the most frequent bigrams, that is, the pairs of words that often occurr together. Among the most common bigrams, we find the family members 'homer simpson', 'bart simpson', and 'lisa simpson', followed by frequent onomatopoeia, like 'woo hoo' or 'hey hey'. -->
+
+<!-- ```{r bigrams} -->
+<!-- dialogue_bigram <- dialogues %>% -->
+<!--   unnest_tokens(bigram, line, token = "ngrams", n = 2) -->
+
+<!-- dialogue_filtered <- dialogue_bigram %>% -->
+<!--   separate(bigram, c("word1", "word2"), sep = " ") %>% -->
+<!--   filter(!word1 %in% stop_words$word & !is.na(word1)) %>% -->
+<!--   filter(!word2 %in% stop_words$word & !is.na(word2)) -->
+
+<!-- bigram_counts <- dialogue_filtered %>% -->
+<!--   count(word1, word2, sort = TRUE) -->
+
+<!-- bigram_united <- dialogue_filtered %>% -->
+<!--   unite(bigram, word1, word2, sep = " ") -->
+
+<!-- bigram_united %>% -->
+<!--   count(bigram, sort = TRUE) %>% -->
+<!--   show_table(head = 10, col.names = c("Bigram", "Frequency"), -->
+<!--              align = c("l", "r")) -->
+<!-- ``` -->
+
+<!-- The following table shows the bigrams with the highest tf-idf that occurred more than 50 times. At the top, we find 'haw haw', the signature mocking laugh of Nelson, and 'kent broackman', for the TV announcer always going 'This is Kent Brockman'. -->
+
+<!-- ```{r bigrams_tf_idf} -->
+<!-- bigram_tf_idf <- bigram_united %>% -->
+<!--   count(role, bigram) %>% -->
+<!--   bind_tf_idf(bigram, role, n) %>% -->
+<!--   arrange(desc(tf_idf)) -->
+
+<!-- bigram_tf_idf %>% -->
+<!--   filter(n > 50) %>% -->
+<!--   distinct(role, .keep_all = TRUE) %>% -->
+<!--   show_table(col.names = c("Character", "Bigram", "Frequency", "tf", "idf", "tf-idf"), -->
+<!--              align = c("l", rep("r", 5))) -->
+<!-- ``` -->
+
+<!-- ## Networks -->
+<!-- The following network plot depicts the relationships across the bigrams that occurred at least 30 times. The biggest networks seem to revolve around the words 'simpson', 'dollars' and 'hoo'. -->
+
+<!-- ```{r networks, fig.height=8, out.width="650"} -->
+<!-- bigram.graph <- bigram_counts %>% -->
+<!--   filter(n > 30) %>% -->
+<!--   graph_from_data_frame() -->
+
+<!-- set.seed(1234) -->
+<!-- a <- grid::arrow(type = "closed", length = unit(.15, "inches")) -->
+
+<!-- ggraph(bigram.graph, layout = "fr") + -->
+<!--   geom_edge_link(aes(edge_alpha = n), show.legend = FALSE, -->
+<!--                  arrow = a, end_cap = circle(.07, "inches")) + -->
+<!--   geom_node_point(color = "lightblue", size = 5) + -->
+<!--   geom_node_text(aes(label = name), vjust = 1, hjust = 1) + -->
+<!--   theme_void() -->
+<!-- ``` -->
+
+<!-- ## Sentiment Analysis -->
+
+<!-- Let us now investigate which words most contribute to positive and negative sentiments.  -->
+
+<!-- The following plot shows the most positive and negative words among those occurring at least 400 times throughout the seasons. The positive words with the highest contributions are 'love', 'wow' and 'nice', whereas among the negative ones we find 'bad', 'burns' and 'stupid'. The word 'burns' has been associated to a negative sentiment because it is seen as the third person of the verb 'to burn', which has a negative connotation. In the case of the Simpsons though, that word might simply refer to the character Mr. Burns. However, due to the evil and greedy nature of that character, the graph does not seem inaccurate after all! -->
+
+<!-- ```{r sentiment,  fig.height=8, out.width="500"} -->
+<!-- simpsons_sentiments <- dialogues.tidy %>% -->
+<!--   inner_join(get_sentiments("bing"), by = "word") -->
+
+<!-- simpsons_sentiments %>% -->
+<!--   count(sentiment, word) %>% -->
+<!--   ungroup() %>% -->
+<!--   filter(n > 400) %>% -->
+<!--   mutate(n = ifelse(sentiment == "negative", -n, n)) %>% -->
+<!--   mutate(word = reorder(word, n)) %>% -->
+<!--   ggplot(aes(word, n, fill = sentiment)) + -->
+<!--   geom_bar(stat = "identity") + -->
+<!--   labs(x = "Word", y = "Contribution to sentiment") + -->
+<!--   coord_flip() + -->
+<!--   scale_fill_manual(name = "Sentiment", values = colors[2:3]) + -->
+<!--   theme(legend.position = "bottom") -->
+<!-- ``` -->
+
+<!-- Let us inspect the words that most contribut to the positive and negative sentiments for the 6 most talkative characters of the show. The characters generally share the same positive (e.g., 'love', 'nice', 'fine') and negative words (e.g., 'bad', 'wrong'). -->
+
+<!-- ```{r sentiment_chars, fig.height=6} -->
+<!-- bar_chart_sentiment <- function(df, x, y, z, slice = 12){ -->
+
+<!--   x <- enquo(x) -->
+<!--   y <- enquo(y) -->
+<!--   z <- enquo(z) -->
+
+<!--   df %>% -->
+<!--     count(!! x, !! y, !! z) %>% -->
+<!--     mutate(n = ifelse(!! z == "negative", -n, n), -->
+<!--            !! x := reorder(!! x, -abs(n), sum), -->
+<!--            !! y := reorder_within(!! y, n, !! x)) %>% -->
+<!--     group_by(!! x) %>% -->
+<!--     arrange(desc(abs(n))) %>% -->
+<!--     slice(1:slice) %>% -->
+<!--     ggplot(aes(!! y, n, fill = !! z)) + -->
+<!--     geom_bar(stat = "identity") + -->
+<!--     coord_flip() + -->
+<!--     scale_fill_manual(name = "Sentiment", values = colors[2:3]) + -->
+<!--     labs(x = "Word", y = "Contribution to sentiment") + -->
+<!--     scale_x_reordered() + -->
+<!--     theme(legend.position = "bottom") -->
+<!-- } -->
+
+<!-- simpsons_sentiments %>% -->
+<!--   filter(role %in% Top20Chars[1:6]) %>%  -->
+<!--   bar_chart_sentiment(x = role, y = word, z = sentiment) + -->
+<!--   facet_wrap(~ role, scales = "free")  -->
+<!-- ``` -->
+
+
+<!-- ## Wordclouds -->
+
+<!-- Let us now depict a wordcloud of the whole dialogues.  -->
+
+<!-- ```{r wordcloud_global, fig.height=6, out.width="400", out.height="600"} -->
+<!-- plot_wordcloud <- function(df, x, y, head = TRUE, head.size = 50,  -->
+<!--                            shape = diamond, max.size = 15){ -->
+
+<!--   x <- enquo(x) -->
+<!--   y <- enquo(y) -->
+
+<!--   if(head){ -->
+<!--     df <- df %>% -->
+<!--       head(head.size) -->
+<!--   } -->
+
+<!--   df %>% -->
+<!--     ggplot(aes(label = !! x, size = !! y, -->
+<!--                color =  factor(sample.int(10, length(!! x), replace = TRUE))), -->
+<!--                shape = shape) + -->
+<!--     geom_text_wordcloud(rm_outside = TRUE) + -->
+<!--     scale_size_area(max_size = max.size) -->
+<!-- } -->
+
+<!-- set.seed(1234) -->
+<!-- dialogues.tidy %>% -->
+<!--   count(word, sort = TRUE) %>%  -->
+<!--   plot_wordcloud(x = word, y = n) + -->
+<!--   theme_minimal() -->
+<!-- ``` -->
+
+<!-- The plot gives an idea of the most recurrent words throughout the seasons. It would be interesting to depict a separate wordcloud for the most talkative characters of the show, to get an insight of their recurrent 'theme'. Besides the fact that the most recurrent words for each characters are the ones used for interacting with the other characters, we can define a broad theme revolving around school and friends for Bart and Lisa Simpson, the bar for the bar owner Moe, and the nuclear plant for Mr. Burns. -->
+
+<!-- ```{r wordcloud_chars} -->
+<!-- dialogues.tidy %>% -->
+<!--   filter(role %in% Top20Chars[1:6]) %>% -->
+<!--   count(role, word, sort = TRUE) %>% -->
+<!--   group_by(role) %>% -->
+<!--   top_n(15, n) %>% -->
+<!--   distinct(word, .keep_all = TRUE) %>% -->
+<!--   mutate(prop = n() / sum(n())) %>% -->
+<!--   ungroup() %>% -->
+<!--   mutate(role = reorder(role, -n, sum)) %>% -->
+<!--   plot_wordcloud(x = word, y = abs(prop), head = FALSE, shape = circle, max.size = 4) + -->
+<!--   facet_wrap(~role) -->
+<!-- ``` -->
+
+<!-- Which sentiment prevails in the locations where the characters talk the most? -->
+
+<!-- ```{r sentiment_locations, fig.height=6} -->
+<!-- dialogues.top.locations <- simpsons_sentiments %>% -->
+<!--   filter(location %in% top.locations) -->
+
+<!-- dialogues.top.locations %>% -->
+<!--   bar_chart_sentiment(x = location, y = word, z = sentiment) + -->
+<!--   facet_wrap(~ location, scales = "free") -->
+<!-- ``` -->
+
+<!-- ## Topic Modelling -->
+
+<!-- In this section, we analyze the term document matrix of `dialogues`. Considering the show episodes as the documents does not provide much insight, as we expect episodes to generally share the same themes. Therefore, we will consider as a document the lines said by a certain character. -->
+
+<!-- To get more insightful resuls, we remove from `dialogues.tidy` some onomatopoeia, and when constructing the document term matrix, we keep those words occurring at least 20 times, and whose tf-idf is higher than the 80% quantile. -->
+
+<!-- ```{r doc_term_mat} -->
+<!-- custom_stopwords <- stop_words %>% -->
+<!--   add_row(word = c("hey", "gonna", "yeah", "uh", "ya", "ho", "la", "em", -->
+<!--           "ah", "huh", "ooh", "gotta", "eh", "aw", "heh", "wow", -->
+<!--           "ow", "haw", "woo",	"ha", "wanna", "whoa", "hoo")) -->
+
+<!-- dialogues.tidy.lda <- dialogues.tidy %>% -->
+<!--   anti_join(custom_stopwords, by = "word") %>% -->
+<!--   select(role, word) %>% -->
+<!--   na.omit() -->
+
+<!-- y     <- document_term_frequencies(dialogues.tidy.lda) -->
+<!-- dtm.y <- document_term_matrix(y) -->
+<!-- dtm.y <- dtm_remove_lowfreq(dtm.y, minfreq = 20) -->
+<!-- y     <- dtm_remove_tfidf(dtm.y, prob = 0.8) -->
+<!-- ``` -->
+
+<!-- We can now perform a Latent Dirichlet Allocation (LDA) analysis on the document term matrix. Let us start by assuming that there are two hidden topics. -->
+
+<!-- ```{r lda} -->
+<!-- simpsons_lda <- LDA(y, k = 2, control = list(seed = 13)) -->
+<!-- ``` -->
+
+<!-- The plot below shows the 10 words that are most representative of each topic. It seems that the first topic is related to the simpsons and their social life (as indicated by the words 'moe' and 'beer'), whereas the second one to the simpsons, their children and family life (as indicated by the words 'dad' and 'homie'). Some words also appear on both topics, like 'homer', 'money' and 'god'. -->
+
+<!-- ```{r beta, fig.height=6, out.width="600"} -->
+<!-- simpsons_topics <- simpsons_lda %>% -->
+<!--   tidy(matrix = "beta") -->
+
+<!-- simpsons_topics %>% -->
+<!--   group_by(topic) %>% -->
+<!--   top_n(10, beta) %>% -->
+<!--   ungroup() %>% -->
+<!--   arrange(topic, -beta) %>% -->
+<!--   mutate(term = reorder_within(term, beta, topic), -->
+<!--          topic = factor(topic, levels = c(1, 2), labels = c("Topic 1", "Topic 2"))) %>% -->
+<!--   ggplot(aes(term, beta, fill = as.factor(topic))) + -->
+<!--   geom_col(show.legend = FALSE) + -->
+<!--   facet_wrap(~topic, scales = "free") + -->
+<!--   coord_flip() + -->
+<!--   scale_x_reordered() + -->
+<!--   scale_fill_manual(values = c("#62AF67ff", "#989DCDff")) + -->
+<!--   labs(x = "Term", y = "Beta") -->
+<!-- ``` -->
+
+<!-- We can now allocate each Simpson character to the topic for they are most likely to belong to. The following plot shows the gamma probabilities for the most talkative characters. Wylon Smithers is the character with the highest classification probability to topic 1. One of the most significant word for topic 1 was 'sir', which is indeed very often used by Smithers to address his boss Mr. Burns. Lisa Simpson, instead, has the highest probability of belonging to topic 2. -->
+
+<!-- ```{r gamma, fig.height=8.5, out.width="500"} -->
+<!-- simpsons_gamma <- simpsons_lda %>%  -->
+<!--   tidy(matrix = "gamma") -->
+
+<!-- simpsons_classification <- simpsons_gamma %>% -->
+<!--   group_by(document) %>% -->
+<!--   top_n(1, gamma) %>% -->
+<!--   ungroup() -->
+
+<!-- TopChars <- dialogues %>% -->
+<!--   count(role, sort = TRUE) %>% -->
+<!--   head(20) -->
+
+<!-- simpsons_gamma %>% -->
+<!--   inner_join(TopChars, by = c("document" = "role")) %>% -->
+<!--   mutate(topic = as.factor(topic), -->
+<!--          document = fct_reorder(document, n)) %>% -->
+<!--   ggplot(aes(document, topic, fill = gamma)) + -->
+<!--   geom_tile() + -->
+<!--   coord_flip() + -->
+<!--   scale_fill_gradient(low="white", high="blue") + -->
+<!--   labs(x = "", y = "Topic") -->
+<!-- ``` -->
+
