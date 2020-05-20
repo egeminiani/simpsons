@@ -278,103 +278,105 @@ ggarrange(plot.top.chars, plot.supporting.chars, nrow = 1, common.legend = TRUE,
           widths = c(0.95, 1.05))
 ```
 
-<!-- <img style="float: right;width: 250px;" src="Images/locations.png"> -->
+<img style="float: right;width: 180px;" src="Images/locations.png">
+&nbsp;
+&nbsp;
 
-<!-- # Locations -->
+# Locations
 
-<!-- The Simpsons show is mainly setted in Springfield, a fictional town acting as a complete universe in which the characters can explore the issues faced by modern society. Although the `location` data set reports 4459 distinct locations, most of the dialogues actually take place in way less settings. -->
+<div style="clear: right">
+The Simpsons show is mainly settled in Springfield, a fictional town acting like a complete universe in which the characters can explore the issues faced by modern society. Although the `locations` data set reports 4459 distinct settings, most of the dialogues actually take place in way fewer places.
+</div>
 
-<!-- &nbsp; -->
+The following treemap depicts the 20 most common locations, that is, the settings where the characters had the most dialogue. At the top, we find The Simpson home, followed by Springfield Elementary School, and Moe's Tavern. The majority of these locations denote indoor settings.
 
-<!-- In the following treemap, we depicts the 20 most common locations (that is, where the characters talked the most). At the top, there is The Simpson home, followed by Springfield Elementary School, and Moe's Tavern. The majority of these locations denote indoor settings. -->
+&nbsp;
 
-<!-- &nbsp; -->
+```{r common_locations, fig.height = 7, out.width="550", out.height="550"}
+dialogues.tidy %>%
+  count(location, sort = TRUE) %>%
+  head(20) %>%
+  add_column("Space" = c(rep("Indoor", 8), rep("Outdoor", 3), rep("Indoor", 3), "Outdoor",
+                         rep("Indoor", 3), "Outdoor", "Indoor")) %>%
+  mutate(Space = as.factor(Space)) %>%
+  ggplot(aes(area = n, label = location, fill = Space, subgroup = location)) +
+  geom_treemap( alpha = 0.8) +
+  geom_treemap_subgroup_border(color = "black", size = 0.85) +
+  geom_treemap_text(place = "centre", size = 13,
+                    grow = FALSE, reflow = TRUE) +
+  scale_fill_manual(values = c("#62AF67ff", "#989DCDff")) +
+  theme(legend.position = "bottom") +
+  labs(title = "Top 20 locations",
+       subtitle = "Most dialogues take place at the Simpson home, and indoor.")
+```
 
-<!-- ```{r common_locations, fig.height = 8, out.width="600", out.height="600"} -->
-<!-- dialogues.tidy %>% -->
-<!--   count(location, sort = TRUE) %>% -->
-<!--   head(20) %>% -->
-<!--   add_column("Space" = c(rep("Indoor", 8), rep("Outdoor", 3), rep("Indoor", 3), "Outdoor", -->
-<!--                          rep("Indoor", 3), "Outdoor", "Indoor")) %>% -->
-<!--   mutate(Space = as.factor(Space)) %>% -->
-<!--   ggplot(aes(area = n, label = location, fill = Space, subgroup = location)) + -->
-<!--   geom_treemap( alpha = 0.8) + -->
-<!--   geom_treemap_subgroup_border(color = "black", size = 0.85) + -->
-<!--   geom_treemap_text(place = "centre", size = 13, -->
-<!--                     grow = FALSE, reflow = TRUE) + -->
-<!--   scale_fill_manual(values = c("#62AF67ff", "#989DCDff")) + -->
-<!--   theme(legend.position = "bottom") + -->
-<!--   labs(title = "Top 20 locations", -->
-<!--        subtitle = "Most dialogues take place at the Simpson home, and indoor.") -->
-<!-- ``` -->
+Let us select the six most recurrent locations, and explore which characters have the most dialogue therein.
 
-<!-- Let us select the 6 most recurrent locations, and explore which characters have the most dialogues within these locations. -->
+* **Simpson home**: it is the house of the Simpson family. The most talkative characters here are of course the Simpson family members.
 
-<!-- * **Simpson home**: it is the house of the Simpsons family, and the most talkative characters here are of course the family members. -->
+* **Springfield Elementary School**: it is the local school on The Simpsons, attended by Bart and Lisa Simpson. Besides the two of them, other leading characters include the principal Skinner, the superintendent Chalmers and the teacher Edna.
 
-<!-- * **Springfield Elementary School**: it is the local school on The Simpsons, attended by Bart and Lisa Simpson. Besides the two of them, the other main characters are the principal Skinner, the superintendent Chalmers and the teacher Edna. -->
+* **Moe's Tavern**: it is the local bar in Springfield. The dialogue here mostly occurs between the owner Moe and his guests Homer, Lenny, Carl, and Barney.
 
-<!-- * **Moe's Tavern**: it is local bar in Springfield, and the main dialogues take place between the owner Moe and his guests, that is, Homer and his friends Lenny, Carl and Barney. -->
+* **Springfield Nuclear Power Plant**: it is the nuclear power plant in Springfield. The leading characters here are Mr. Burns, who owns the plant, his executive assistant Smithers, and the employees Homer, Lenny, and Carl.
 
-<!-- * **Springfield Nuclear Power Plant**: the main characters here are Mr. Burns (the owner of the plant), Smithers (his executive assistant), and the employees Homer, Lenny and Carl. -->
+* **Kwik-E-Mart**: it is the convenience store run by Apu. The dialogues here usually involve the owner of the store and the members of the Simpson family.
 
-<!-- * **Kwik-E-Mart**: it is a convenience store run by Apu. Besides him, the other main characters include the member of the Simpson family. -->
+* **First Church of Springfield**: it is the main religious house in Springfield. Most of the dialogues here occur between the Reverend, the Simpson family, and their very religious next-door neighbor Ned.
 
-<!-- * **First Church of Springfield**: it is the main religious house in Springfield, and the dialogues here mainly occurr between the Reverend, the Simpson family, and Ned, their very religious next-door neighbor. -->
+```{r common_chars_by_location, fig.width=11, fig.height=7}
+top.locations <- dialogues.tidy %>%
+  count(location, word, sort = TRUE) %>%
+  group_by(location) %>%
+  summarize(n = n()) %>%
+  arrange(desc(n)) %>%
+  top_n(6, n) %>%
+  pull(location)
 
-<!-- ```{r common_chars_by_location, fig.width=11, fig.height=7} -->
-<!-- top.locations <- dialogues.tidy %>% -->
-<!--   count(location, word, sort = TRUE) %>% -->
-<!--   group_by(location) %>% -->
-<!--   summarize(n = n()) %>% -->
-<!--   arrange(desc(n)) %>% -->
-<!--   top_n(6, n) %>% -->
-<!--   pull(location) -->
+set.seed(2)
+dialogues.tidy %>%
+  filter(location %in% top.locations) %>%
+  count(role, location, sort = TRUE) %>%
+  group_by(location) %>%
+  top_n(5, n) %>%
+  ungroup() %>%
+  mutate(location = fct_reorder(location, -n, sum)) %>%
+  ggplot(aes(reorder_within(role, n, location), n, fill = fct_reorder(role, n, sum))) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  facet_wrap(~location, scales = "free") +
+  scale_fill_manual(values = sample(palette)) +
+  labs(title = "Who speaks the most where?", x = "", y = "")  +
+  scale_y_continuous(labels = comma) +
+  theme(panel.spacing = unit(0.5, "lines")) +
+  scale_x_reordered()
+```
 
-<!-- set.seed(2) -->
-<!-- dialogues.tidy %>% -->
-<!--   filter(location %in% top.locations) %>% -->
-<!--   count(role, location, sort = TRUE) %>% -->
-<!--   group_by(location) %>% -->
-<!--   top_n(5, n) %>% -->
-<!--   ungroup() %>% -->
-<!--   mutate(location = fct_reorder(location, -n, sum)) %>% -->
-<!--   ggplot(aes(reorder_within(role, n, location), n, fill = fct_reorder(role, n, sum))) + -->
-<!--   geom_col(show.legend = FALSE) + -->
-<!--   coord_flip() + -->
-<!--   facet_wrap(~location, scales = "free") + -->
-<!--   scale_fill_manual(values = sample(palette)) + -->
-<!--   labs(title = "Who speaks the most where?", x = "", y = "")  + -->
-<!--   scale_y_continuous(labels = comma) + -->
-<!--   theme(panel.spacing = unit(0.5, "lines")) + -->
-<!--   scale_x_reordered() -->
-<!-- ``` -->
+The following plot depicts the distribution of the total number of words per season pronounced by the four Simpsons family members Homer, Marge, Bart, and Lisa through density plots. Whereas Homer Simpson stands out from any other character, the other three Simpson characters seem to have had comparable degrees of importance over the seasons.
 
-<!-- In the following plot, we depict the distribution of the total number of words per season pronounced by the four Simpsons family members through density plots. -->
+```{r nb_lines_characters, fig.height=6, out.width="600", out.height="600"}
+Top20Chars <- dialogues.tidy %>%
+  count(role, word, sort = TRUE) %>%
+  distinct(role) %>%
+  head(20) %>%
+  pull(role)
 
-<!-- ```{r nb_lines_characters, fig.height=6, out.width="500", out.height="600"} -->
-<!-- Top20Chars <- dialogues.tidy %>% -->
-<!--   count(role, word, sort = TRUE) %>% -->
-<!--   distinct(role) %>% -->
-<!--   head(20) %>% -->
-<!--   pull(role) -->
-
-<!-- dialogues.tidy %>% -->
-<!--   filter(role %in% Top20Chars[1:4]) %>% -->
-<!--   group_by(season, role) %>% -->
-<!--   summarize(nwords = n()) %>% -->
-<!--   ungroup() %>% -->
-<!--   mutate(role = reorder(role, -nwords)) %>% -->
-<!--   ggplot(aes(x=nwords, fill = fct_rev(role), color = fct_rev(role))) + -->
-<!--   geom_density(size = 0.85, alpha = 0.65)  + -->
-<!--   scale_x_continuous(labels = comma) + -->
-<!--   labs(x = "Number of words per season", y = "Density", -->
-<!--        title = "Distribution of the total number of words per season") + -->
-<!--   guides(fill = guide_legend(reverse = TRUE), color = guide_legend(reverse = TRUE)) + -->
-<!--   scale_fill_manual(name = "Character", values = rev(palette[c(8,14,6,1)])) + -->
-<!--   scale_color_manual(name = "Character", values = rev(palette[c(8,14,6,1)])) + -->
-<!--   theme(legend.position = "bottom") -->
-<!-- ``` -->
+dialogues.tidy %>%
+  filter(role %in% Top20Chars[1:4]) %>%
+  group_by(season, role) %>%
+  summarize(nwords = n()) %>%
+  ungroup() %>%
+  mutate(role = reorder(role, -nwords)) %>%
+  ggplot(aes(x=nwords, fill = fct_rev(role), color = fct_rev(role))) +
+  geom_density(size = 0.85, alpha = 0.65)  +
+  scale_x_continuous(labels = comma) +
+  labs(x = "Number of words per season", y = "Density",
+       title = "Distribution of the total number of words per season") +
+  guides(fill = guide_legend(reverse = TRUE), color = guide_legend(reverse = TRUE)) +
+  scale_fill_manual(name = "Character", values = rev(palette[c(8,14,6,1)])) +
+  scale_color_manual(name = "Character", values = rev(palette[c(8,14,6,1)])) +
+  theme(legend.position = "bottom")
+```
 
 <!-- <img style="float: right;width: 120px;" src="Images/tv.jpg"> -->
 <!-- &nbsp; -->
