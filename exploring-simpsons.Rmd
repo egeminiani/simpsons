@@ -836,62 +836,64 @@ ggraph(bigram.graph, layout = "fr") +
   theme_void()
 ```
 
-<!-- ## Sentiment Analysis -->
+## Sentiment Analysis
 
-<!-- Let us now investigate which words most contribute to positive and negative sentiments.  -->
+We can carry out a sentiment analysis to explore the feelings that emerge from the Simpsons dialogues. We are using the 'bing' lexicon, which attributes a positive or negative valence to each word in its vocabulary.
 
-<!-- The following plot shows the most positive and negative words among those occurring at least 400 times throughout the seasons. The positive words with the highest contributions are 'love', 'wow' and 'nice', whereas among the negative ones we find 'bad', 'burns' and 'stupid'. The word 'burns' has been associated to a negative sentiment because it is seen as the third person of the verb 'to burn', which has a negative connotation. In the case of the Simpsons though, that word might simply refer to the character Mr. Burns. However, due to the evil and greedy nature of that character, the graph does not seem inaccurate after all! -->
+We now investigate which words - occurring at least 400 times - most contribute to the positive and negative sentiments. Among the positive words, we find e.g., 'love', 'wow', 'nice', and 'fine', whereas among the negative ones 'bad', 'burns', 'stupid', and 'kill'. The word 'burns' is associated with a negative sentiment because it is seen as coming from the verb 'to burn', which clearly has a negative connotation. In the Simpsons case though, the word 'burn' is likely to refer to the character called Mr. Burns. However, due to the evil and greedy nature of the character himself, the graph seems pretty accurate after all!
 
-<!-- ```{r sentiment,  fig.height=8, out.width="500"} -->
-<!-- simpsons_sentiments <- dialogues.tidy %>% -->
-<!--   inner_join(get_sentiments("bing"), by = "word") -->
+```{r sentiment,  fig.height=8, out.width="500"}
+simpsons_sentiments <- dialogues.tidy %>%
+  inner_join(get_sentiments("bing"), by = "word")
 
-<!-- simpsons_sentiments %>% -->
-<!--   count(sentiment, word) %>% -->
-<!--   ungroup() %>% -->
-<!--   filter(n > 400) %>% -->
-<!--   mutate(n = ifelse(sentiment == "negative", -n, n)) %>% -->
-<!--   mutate(word = reorder(word, n)) %>% -->
-<!--   ggplot(aes(word, n, fill = sentiment)) + -->
-<!--   geom_bar(stat = "identity") + -->
-<!--   labs(x = "Word", y = "Contribution to sentiment") + -->
-<!--   coord_flip() + -->
-<!--   scale_fill_manual(name = "Sentiment", values = colors[2:3]) + -->
-<!--   theme(legend.position = "bottom") -->
-<!-- ``` -->
+bar_chart_sentiment <- function(df, x = NULL, y, z, slice = NULL, count = TRUE){
 
-<!-- Let us inspect the words that most contribut to the positive and negative sentiments for the 6 most talkative characters of the show. The characters generally share the same positive (e.g., 'love', 'nice', 'fine') and negative words (e.g., 'bad', 'wrong'). -->
+  y <- enquo(y)
+  z <- enquo(z)
 
-<!-- ```{r sentiment_chars, fig.height=6} -->
-<!-- bar_chart_sentiment <- function(df, x, y, z, slice = 12){ -->
+  if(count){
+    x <- enquo(x)
+    df <-   df %>%
+      count(!! x, !! y, !! z) %>%
+      mutate(n = ifelse(!! z == "negative", -n, n),
+             !! x := reorder(!! x, -abs(n), sum),
+             !! y := reorder_within(!! y, n, !! x)) %>%
+      group_by(!! x) %>%
+      arrange(desc(abs(n)))
+  }
+  
+  if(!is.null(slice)){
+    df <- df %>%
+      slice(slice)
+  }
+  
+  df %>%
+    ggplot(aes(!! y, n, fill = !! z)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    scale_fill_manual(name = "Sentiment", values = c("#f1776a", "#8bc384")) +
+    labs(x = "Word", y = "Contribution to sentiment") +
+    scale_x_reordered() +
+    theme(legend.position = "bottom")
+}
 
-<!--   x <- enquo(x) -->
-<!--   y <- enquo(y) -->
-<!--   z <- enquo(z) -->
+simpsons_sentiments %>%
+  count(sentiment, word) %>%
+  ungroup() %>%
+  filter(n > 400) %>%
+  mutate(n = ifelse(sentiment == "negative", -n, n)) %>%
+  mutate(word = reorder(word, n)) %>%
+  bar_chart_sentiment(y = word, z = sentiment, count = FALSE)
+```
 
-<!--   df %>% -->
-<!--     count(!! x, !! y, !! z) %>% -->
-<!--     mutate(n = ifelse(!! z == "negative", -n, n), -->
-<!--            !! x := reorder(!! x, -abs(n), sum), -->
-<!--            !! y := reorder_within(!! y, n, !! x)) %>% -->
-<!--     group_by(!! x) %>% -->
-<!--     arrange(desc(abs(n))) %>% -->
-<!--     slice(1:slice) %>% -->
-<!--     ggplot(aes(!! y, n, fill = !! z)) + -->
-<!--     geom_bar(stat = "identity") + -->
-<!--     coord_flip() + -->
-<!--     scale_fill_manual(name = "Sentiment", values = colors[2:3]) + -->
-<!--     labs(x = "Word", y = "Contribution to sentiment") + -->
-<!--     scale_x_reordered() + -->
-<!--     theme(legend.position = "bottom") -->
-<!-- } -->
+The words that are most contributing to the positive (e.g., 'love', 'nice', 'fine') and negative sentiments  (e.g., 'bad', 'wrong') do not seem to be character-dependent.
 
-<!-- simpsons_sentiments %>% -->
-<!--   filter(role %in% Top20Chars[1:6]) %>%  -->
-<!--   bar_chart_sentiment(x = role, y = word, z = sentiment) + -->
-<!--   facet_wrap(~ role, scales = "free")  -->
-<!-- ``` -->
-
+```{r sentiment_chars, fig.height=6}
+simpsons_sentiments %>%
+  filter(role %in% Top20Chars[1:6]) %>%
+  bar_chart_sentiment(x = role, y = word, z = sentiment, slice = c(1:12)) +
+  facet_wrap(~ role, scales = "free")
+```
 
 <!-- ## Wordclouds -->
 
