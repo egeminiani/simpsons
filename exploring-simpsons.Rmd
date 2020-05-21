@@ -542,7 +542,7 @@ In addition to the show's regular cast of voice actors, celebrity guest stars ha
 
 The `guests` data set contains information about the guest stars that took part in every episode and their role. Let us have a look at the most recurring guest voices and roles.
 
-## Most frequent guest stars
+## Frequent guest stars
 
 The most frequent guest stars across 30 seasons are Marcia Wallace, Phil Hartman, and Maurice LaMarche. Whereas Marcia Wallace was almost always playing the teacher Edna Krabappel-Flanders, the other two guest stars actually voiced several characters on the show.
 
@@ -558,7 +558,7 @@ guests %>%
 
 ```
 
-## Most frequent roles
+## Frequent roles
 
 The most frequent roles played by guest stars are either themselves or some supporting characters, such as the teacher Edna Krabappel-Flanders, the gangster Fat Tony, and the actor Troy McClure.  
 
@@ -765,64 +765,76 @@ role.specificity %>%
        x = "", y = "TF-IDF")
 ```
 
-<!-- ## Bigrams Analysis -->
+## Bigrams Analysis {.tabset .tabset-pills}
 
-<!-- Let us explore the most frequent bigrams, that is, the pairs of words that often occurr together. Among the most common bigrams, we find the family members 'homer simpson', 'bart simpson', and 'lisa simpson', followed by frequent onomatopoeia, like 'woo hoo' or 'hey hey'. -->
+Let us now focus on the bigrams, that is, the pairs of words that occurr often together. 
 
-<!-- ```{r bigrams} -->
-<!-- dialogue_bigram <- dialogues %>% -->
-<!--   unnest_tokens(bigram, line, token = "ngrams", n = 2) -->
 
-<!-- dialogue_filtered <- dialogue_bigram %>% -->
-<!--   separate(bigram, c("word1", "word2"), sep = " ") %>% -->
-<!--   filter(!word1 %in% stop_words$word & !is.na(word1)) %>% -->
-<!--   filter(!word2 %in% stop_words$word & !is.na(word2)) -->
+### Frequent bigrams
 
-<!-- bigram_counts <- dialogue_filtered %>% -->
-<!--   count(word1, word2, sort = TRUE) -->
+The most recurrent bigrams concern the names of the Simpson family (e.g., 'homer simpson', 'bart simpson', 'lisa simpson') or some onomatopoeia (e.g., 'woo hoo', 'hey hey', 'la la').
 
-<!-- bigram_united <- dialogue_filtered %>% -->
-<!--   unite(bigram, word1, word2, sep = " ") -->
+```{r bigrams}
+dialogue_bigram <- dialogues %>%
+  unnest_tokens(bigram, line, token = "ngrams", n = 2)
 
-<!-- bigram_united %>% -->
-<!--   count(bigram, sort = TRUE) %>% -->
-<!--   show_table(head = 10, col.names = c("Bigram", "Frequency"), -->
-<!--              align = c("l", "r")) -->
-<!-- ``` -->
+dialogue_filtered <- dialogue_bigram %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(!word1 %in% stop_words$word & !is.na(word1)) %>%
+  filter(!word2 %in% stop_words$word & !is.na(word2))
 
-<!-- The following table shows the bigrams with the highest tf-idf that occurred more than 50 times. At the top, we find 'haw haw', the signature mocking laugh of Nelson, and 'kent broackman', for the TV announcer always going 'This is Kent Brockman'. -->
+bigram_counts <- dialogue_filtered %>%
+  count(word1, word2, sort = TRUE)
 
-<!-- ```{r bigrams_tf_idf} -->
-<!-- bigram_tf_idf <- bigram_united %>% -->
-<!--   count(role, bigram) %>% -->
-<!--   bind_tf_idf(bigram, role, n) %>% -->
-<!--   arrange(desc(tf_idf)) -->
+bigram_united <- dialogue_filtered %>%
+  unite(bigram, word1, word2, sep = " ")
 
-<!-- bigram_tf_idf %>% -->
-<!--   filter(n > 50) %>% -->
-<!--   distinct(role, .keep_all = TRUE) %>% -->
-<!--   show_table(col.names = c("Character", "Bigram", "Frequency", "tf", "idf", "tf-idf"), -->
-<!--              align = c("l", rep("r", 5))) -->
-<!-- ``` -->
+bigram_united %>%
+  count(bigram, sort = TRUE) %>%
+  show_table(head = 10, col.names = c("Bigram", "Frequency"),
+             caption = "Top 10 bigrams throughout 26 seasons", align = c("l", "r"))
+```
 
-<!-- ## Networks -->
-<!-- The following network plot depicts the relationships across the bigrams that occurred at least 30 times. The biggest networks seem to revolve around the words 'simpson', 'dollars' and 'hoo'. -->
 
-<!-- ```{r networks, fig.height=8, out.width="650"} -->
-<!-- bigram.graph <- bigram_counts %>% -->
-<!--   filter(n > 30) %>% -->
-<!--   graph_from_data_frame() -->
+### Peculiar bigrams
 
-<!-- set.seed(1234) -->
-<!-- a <- grid::arrow(type = "closed", length = unit(.15, "inches")) -->
+The peculiar bigrams were found as the bigrams with the largest tf-idf and that occurred over 50 times. At the top positions, we find the signature mocking laugh of Nelson 'haw haw', and 'kent brockman' as the TV announcer is always starting off with 'This is Kent Brockman'.
 
-<!-- ggraph(bigram.graph, layout = "fr") + -->
-<!--   geom_edge_link(aes(edge_alpha = n), show.legend = FALSE, -->
-<!--                  arrow = a, end_cap = circle(.07, "inches")) + -->
-<!--   geom_node_point(color = "lightblue", size = 5) + -->
-<!--   geom_node_text(aes(label = name), vjust = 1, hjust = 1) + -->
-<!--   theme_void() -->
-<!-- ``` -->
+```{r bigrams_tf_idf}
+bigram_tf_idf <- bigram_united %>%
+  count(role, bigram) %>%
+  bind_tf_idf(bigram, role, n) %>%
+  arrange(desc(tf_idf))
+
+bigram_tf_idf %>%
+  filter(n > 50) %>%
+  distinct(role, .keep_all = TRUE) %>%
+  show_table(col.names = c("Character", "Bigram", "Frequency", "tf", "idf", "tf-idf"),
+             align = c("l", rep("r", 5)), 
+             caption = "Peculiar bigrams occurring over 50 times throughout 26 seasons")
+```
+
+## {-}
+
+### Networks
+
+The relationships across the bigrams can be depicted through a network plot. To keep the plot readable, we consider bigrams that occurred at least 30 times. The nodes from which the most arrows are departing seem to be 'simpson', 'dollars', and 'hoo'. The most common bigrams actually refer to character names, locations, or onomatopeia.
+
+```{r networks, fig.height=8, out.width="650"}
+bigram.graph <- bigram_counts %>%
+  filter(n > 30) %>%
+  graph_from_data_frame()
+
+set.seed(1234)
+a <- grid::arrow(type = "closed", length = unit(.15, "inches"))
+
+ggraph(bigram.graph, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n), show.legend = FALSE,
+                 arrow = a, end_cap = circle(.07, "inches")) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
+  theme_void()
+```
 
 <!-- ## Sentiment Analysis -->
 
