@@ -714,60 +714,56 @@ ggarrange(plot.guest.rating, plot.guest.vote, plot.guest.views, nrow = 1, common
 ```
 
 
-<!-- # Text analysis -->
+# Text analysis
 
-<!-- Let us do some text analysis on the `dialogues` data set. In this case, the episodes of the show will act as the documents of our corpus. -->
+Let us now carry out some text analysis on `dialogues`. In this scenario, the episodes of the show are acting as the documents of the corpus.
 
-<!-- ## Word and document frequency -->
+## Word and document frequency
 
-<!-- Let us first remove the stop words from `dialogues`. -->
+Let us look at the most frequent words. By choosing a distinct combination of role, word, and line number, we are preventing from counting the same word from the same line multiple times. The most recurrent words - after removing the stop words - seem to be related to characters addressing each other.
 
-<!-- ```{r stop_words} -->
-<!-- dialogues.tidy <- dialogues.tidy %>% -->
-<!--   anti_join(stop_words, by = "word") -->
-<!-- ``` -->
+```{r word_counts}
+dialogues.tidy <- dialogues.tidy %>%
+  anti_join(stop_words, by = "word")
 
-<!-- Let us find the most frequent words. By choosing a distinct combination of role, word, and line number we are preventing from counting the same word from the same line multiple times. It seems that the most recurrent words are for characters addressing each other.  -->
+dialogues.summarized <- dialogues.tidy %>%
+  distinct(role, line_number, word) %>%
+  count(role, word, sort = TRUE)
 
-<!-- ```{r word_counts} -->
-<!-- dialogues.summarized <- dialogues.tidy %>% -->
-<!--   distinct(role, line_number, word) %>% -->
-<!--   count(role, word, sort = TRUE) -->
+dialogues.summarized %>%
+  show_table(head = 15, col.names = c("Character", "Word", "Frequency"),
+             align = c("l", "r", "r"))
+```
 
-<!-- dialogues.summarized %>% -->
-<!--   show_table(head = 15, col.names = c("Character", "Word", "Frequency"), -->
-<!--              align = c("l", "r", "r")) -->
-<!-- ``` -->
+We can now compute the term frequency (tf),  the inverse document frequency (idf), and the tf-idf. The latter looks for the most important words in each document that are not too common in other documents. In our case, this means finding the words that are peculiar to a particular character, but generally not to other characters.
 
-<!-- Let us now compute the term frequency (tf),  the inverse document frequency (idf), and their joint measure tf-idf, which finds the important words for each document, but not too common in the other documents. In this context, this translates to finding the peculiar words of a certain character, that are not generally used by the other characters. -->
+```{r specificity}
+role.specificity <- dialogues.summarized %>%
+  group_by(role) %>%
+  mutate(total_words = sum(n)) %>%
+  ungroup() %>%
+  bind_tf_idf(word, role, n) %>%
+  arrange(desc(tf_idf))
+```
 
-<!-- ```{r specificity} -->
-<!-- role.specificity <- dialogues.summarized %>% -->
-<!--   group_by(role) %>% -->
-<!--   mutate(total_words = sum(n)) %>% -->
-<!--   ungroup() %>% -->
-<!--   bind_tf_idf(word, role, n) %>% -->
-<!--   arrange(desc(tf_idf)) -->
-<!-- ``` -->
+The tf-idf can be used as a catchphrase detector. We are looking at the characters with a fair amount of dialogues (i.e., more than 500 words), and keep one row for each character (to find one peculiar word for every role). The plot below shows the words and characters with the highest tf-idf. For some characters, the peculiar word is the name of the character they usually talk to (e.g., Smithers saying 'sir' or Agnes Skinner saying 'Seymour'). In contrast, for others, it is either the word they use to introduce themselves (e.g., Troy McClure saying 'I'm Troy McClure') or recurring sounds (e.g., the Captain going 'Arrr' or Nelson 'haw').
 
-<!-- We can use the tf-idf as a catchphrase detector. We filter for those characters with many dialogues (specifically, more than 500 words), and keep one row for each character (to find a single peculiar word for every role). The following plot shows the words with the highest tf-idf with the associated characters. For some characters, the peculiar word is the name of the character they usually talk to (e.g., Smithers saying 'sir' or Agnes Skinner saying 'Seymour'), for others it is the word they use to introduce themselves (e.g., Troy McClure saying 'I'm Troy McClure'), or as recurring sounds (e.g., the Captain going 'Arrr' or Nelson 'haw'). -->
-
-<!-- ```{r arrr, fig.height=7.5, out.width="600"} -->
-<!-- role.specificity %>% -->
-<!--   filter(total_words >= 500) %>% -->
-<!--   distinct(role, .keep_all = TRUE) %>% -->
-<!--   mutate(role_word = paste0(role, ": ", word)) %>% -->
-<!--   head(20) %>% -->
-<!--   mutate(role_word = fct_reorder(role_word, tf_idf)) %>% -->
-<!--   ggplot(aes(role_word, tf_idf)) + -->
-<!--   geom_segment(aes(role_word, xend = role_word, y = 0, yend = tf_idf), -->
-<!--                color = "#8d99ae", size = 0.8, show.legend = FALSE) + -->
-<!--   geom_point(color = "#8d99ae", size = 4, alpha = 0.6) + -->
-<!--   coord_flip() + -->
-<!--   labs(title = "Using TF-IDF as a Simpsons catchphrase detector", -->
-<!--        subtitle = "Top 20 of the 53 characters speaking at least 500 words in 27 seasons.", -->
-<!--        x = "", y = "TF-IDF") -->
-<!-- ``` -->
+```{r arrr, fig.height=7.5, out.width="550"}
+role.specificity %>%
+  filter(total_words >= 500) %>%
+  distinct(role, .keep_all = TRUE) %>%
+  mutate(role_word = paste0(role, ": ", word)) %>%
+  head(20) %>%
+  mutate(role_word = fct_reorder(role_word, tf_idf)) %>%
+  ggplot(aes(role_word, tf_idf)) +
+  geom_segment(aes(role_word, xend = role_word, y = 0, yend = tf_idf),
+               color = "#8d99ae", size = 0.8, show.legend = FALSE) +
+  geom_point(color = "#8d99ae", size = 4, alpha = 0.6) +
+  coord_flip() +
+  labs(title = "Using TF-IDF as a catchphrase detector",
+       subtitle = "Top 20 characters speaking at least 500 words in 27 seasons.",
+       x = "", y = "TF-IDF")
+```
 
 <!-- ## Bigrams Analysis -->
 
