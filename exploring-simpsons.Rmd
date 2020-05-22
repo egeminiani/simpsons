@@ -42,26 +42,23 @@ Let us explore these data sets and see which insights we can get from them. We s
 
 ```{r libraries}
 library(tidyverse)
+library(tidytext)
+library(topicmodels)
+library(scales)
 library(readr)
 library(kableExtra)
 library(treemapify)
 library(gridExtra)
-library(ggpubr)
-library(tidytext)
-library(RColorBrewer)
-library(tm)
-library(topicmodels)
-library(scales)
-library(treemap)
 library(igraph)
+library(ggpubr)
 library(ggraph)
 library(ggwordcloud)
-library(udpipe)
 library(ggcorrplot)
 library(GGally)
+library(udpipe)
 theme_set(theme_bw())
 
-show_table <- function(x, caption ="", head = 50, scroll = FALSE, full.width = FALSE, 
+show_table <- function(x, caption = "", head = 50, scroll = FALSE, full.width = FALSE, 
                        digits = 2, col.names = NA, align = NULL){
   table <- x %>%
     head(head) %>%
@@ -80,7 +77,7 @@ firstup <- function(x) {
   x
 }
 
-colors  <- c('#fed41d', '#0094c7', '#f14e28')
+colors  <- c('#0094c7', '#f14e28', "#62AF67ff", "#989DCDff")
 palette <- c("#acba81ff", "#2a9430ff", "#ae6b1bff","#024CF0", "#28536bff", "#68aedeff", "#8928e8ff",
              "#f25d30ff", "#d63d2aff", "orchid", "#b49ba0ff", "darkorange", "#ef4d8bff", "#ffc510ff",
              "lightsalmon1", "azure4", "aquamarine3")
@@ -210,8 +207,8 @@ The Simpsons is known for its vast ensemble of leading and supporting characters
 ## Gender distribution
 
 ```{r gender_frequency}
-frequency_table <- function(df, group_var, align = NULL, prop = TRUE, head = nrow(df),
-                            caption = ""){
+frequency_table <- function(df, group_var, align = NULL, prop = TRUE, head = nrow(df), caption = ""){
+  
   group_var <- enquo(group_var)
   col.names <- c(firstup(as_label(group_var)), "Frequency")
 
@@ -250,20 +247,20 @@ dialogues.tidy %>%
 The Simpsons is characterized by a marked gender imbalance, which is also reflected in the show's writing staff. More than 75% of the characters with recorded gender are male. The only female leading characters are Marge and Lisa Simpson. In contrast, among the supporting cast, we find Edna Krappabel-Flanders (the teacher at Springfield Elementary School), and the twins Selma and Patty Bouvier (Marge's older sisters).
 
 ```{r characters_plots, fig.height=6, fig.width=10}
-count_function <- function(df, x, y){
+lollipop <- function(df, x, fill.var, count = TRUE, index = NULL, title = "", ylab = "", 
+                     sub = NULL, pos = "bottom", labels = TRUE){
+  
+  x        <- enquo(x)
+  fill.var <- enquo(fill.var)
+
+  count_function <- function(df, x, y){
   
   x <- enquo(x)
   y <- enquo(y)
   
   df %>%
     count(!! x, !! y, sort = TRUE)
-}
-
-lollipop <- function(df, x, fill.var, count = TRUE, index = NULL, title = "", ylab = "", 
-                     sub = NULL, pos = "bottom", labels = TRUE){
-  
-  x        <- enquo(x)
-  fill.var <- enquo(fill.var)
+  }
   
   if(count){
     df <- df %>%
@@ -285,11 +282,14 @@ lollipop <- function(df, x, fill.var, count = TRUE, index = NULL, title = "", yl
       color = !! fill.var),
       size = 0.8, 
       show.legend = FALSE) +
-    geom_point(aes(color = !! fill.var), size = 4, alpha = 0.6) +
+    geom_point(aes(
+      color = !! fill.var), 
+      size = 4, 
+      alpha = 0.6) +
     coord_flip() +
     labs(x = "", y = ylab, title = title, subtitle = sub) +
-    scale_fill_manual(name  = firstup(as_label(fill.var)),  values = rev(colors[2:3])) +
-    scale_color_manual(name = firstup(as_label(fill.var)),  values = rev(colors[2:3])) +
+    scale_fill_manual(name  = firstup(as_label(fill.var)),  values = rev(colors[1:2])) +
+    scale_color_manual(name = firstup(as_label(fill.var)),  values = rev(colors[1:2])) +
     theme(legend.position = pos)
   
   if(labels){
@@ -325,11 +325,11 @@ dialogues.tidy %>%
   summarize(nwords = n()) %>%
   ungroup() %>%
   mutate(role = reorder(role, -nwords)) %>%
-  ggplot(aes(x=season, y = nwords, fill = role, color = role)) +
+  ggplot(aes(x = season, y = nwords, fill = role, color = role)) +
   scale_y_continuous(labels = comma) +
   scale_x_continuous(breaks = seq(1, 26, 5)) +
   geom_col(alpha = 0.65) +
-  facet_wrap(~role, nrow = 1) +
+  facet_wrap(~ role, nrow = 1) +
   labs(x = "Season", y = "Number of spoken words per season", 
        title = "Homer Simpson has dominated all dialogues in every season") +
   scale_fill_manual(name = "Character", values = palette[c(8,14,6,1)]) +
@@ -363,7 +363,7 @@ dialogues.tidy %>%
   geom_treemap_subgroup_border(color = "black", size = 0.85) +
   geom_treemap_text(place = "centre", size = 13,
                     grow = FALSE, reflow = TRUE) +
-  scale_fill_manual(values = c("#62AF67ff", "#989DCDff")) +
+  scale_fill_manual(values = colors[3:4]) +
   theme(legend.position = "bottom") +
   labs(title = "Top 20 locations",
        subtitle = "Most dialogues take place at The Simpson home, and indoor.")
@@ -391,7 +391,7 @@ dialogues.tidy %>%
   ggplot(aes(reorder_within(role, n, location), n, fill = fct_reorder(role, n, sum))) +
   geom_col(show.legend = FALSE) +
   coord_flip() +
-  facet_wrap(~location, scales = "free") +
+  facet_wrap(~ location, scales = "free") +
   scale_fill_manual(values = sample(palette)) +
   labs(title = "Who speaks the most where?", y = "Number of spoken words throughout 26 seasons", x = "") +
   scale_y_continuous(labels = comma) +
@@ -473,7 +473,7 @@ line_plot <- function(data, x, y, xlab = "Season", ylab, title, sub,
   p <- data %>%
     ggplot(aes(!! x, !! y)) +
     geom_line(size = 1.2, color = "#8d99ae") +
-    geom_point(shape=21, color=colors[2], fill=colors[2], size=1) +
+    geom_point(shape=21, color=colors[1], fill=colors[1], size=1) +
     scale_x_continuous(breaks = seq(1, 27, 4)) +
     labs(x = xlab, y = ylab, title = title, subtitle = sub) +
     theme(plot.subtitle=element_text(size=9))
@@ -509,8 +509,7 @@ plot.view <- episodes_byseason %>%
             labels = unit_format(unit = "", scale = 1e+6, big.mark = ","),
             limits = c(0, 30))
 
-grid.arrange(plot.rating, plot.vote, plot.view, nrow = 1,
-             widths = c(0.95, 0.97, 1.08))
+grid.arrange(plot.rating, plot.vote, plot.view, nrow = 1, widths = c(0.95, 0.97, 1.08))
 ```
 
 # {-}
@@ -547,8 +546,7 @@ The correlation matrix of `episodes` certainly shows strong inverse relationship
 
 ```{r corrmat, fig.height = 4, out.width=600}
 episodes %>%
-  select("Episode number" = episode_id, "IMDb rating" = rating,
-         "IMDb votes" = votes, "TV views in US" = us_views) %>%
+  select("Episode number" = episode_id, "IMDb rating" = rating, "IMDb votes" = votes, "TV views in US" = us_views) %>%
   cor() %>%
   ggcorrplot(type = "lower", colors = c("#6D9EC1", "white", "#E46726"), outline.col = "white",
              legend.title = "Correlation", lab = TRUE, ggtheme = ggplot2::theme_light()) +
@@ -590,8 +588,7 @@ The most frequent roles played by guest stars are either themselves or some supp
 
 ```{r guest_roles_tab2}
 guests %>%
-  frequency_table(role, head = 10, prop = FALSE, caption = "Top 10 guest star roles",
-                  align = c("l", "r"))
+  frequency_table(role, head = 10, prop = FALSE, caption = "Top 10 guest star roles", align = c("l", "r"))
 ```
 
 # {-}
@@ -613,13 +610,12 @@ It would be interesting to see whether the number of guest appearances has chang
 
 ```{r guest_roles2, fig.height=5, fig.width=6, out.width=500}
 guests %>%
-  mutate(self = factor(self, levels = c(FALSE, TRUE),
-                       labels=c("Playing an original character", "Playing themselves"))) %>%
+  mutate(self = factor(self, levels = c(FALSE, TRUE), labels=c("Playing an original character", "Playing themselves"))) %>%
   group_by(season, self) %>%
   summarize(n = n()) %>%
   ggplot(aes(season, n, color = self)) +
   geom_line(size = 1.2) +
-  scale_color_manual(name = "Guest star", values = c("#62AF67ff", "#989DCDff")) +
+  scale_color_manual(name = "Guest star", values = colors[3:4]) +
   scale_x_continuous(breaks = seq(1, 30, 2)) +
   theme(legend.position = "bottom") +
   labs(x = "Season", y = "Number of guest appearences",
@@ -659,7 +655,7 @@ guest_roles %>%
   ggplot(aes(lines_per_episode)) +
   geom_histogram(aes(fill = self), binwidth = 2, center = 1, show.legend = FALSE) +
   facet_wrap(~ self, ncol = 2) +
-  scale_fill_manual(values = c("#62AF67ff", "#989DCDff")) +
+  scale_fill_manual(values = colors[3:4]) +
   labs(x = "Number of lines per episode", y = "Frequency",
        subtitle = "Most guest stars, especially those playing themselves, have relatively few lines per episode")
 ```
@@ -706,9 +702,8 @@ plot_violin <- function(df, x, y, ylab, title = "", limits = NULL,
     group_by(!! x) %>%
     ggplot(aes(!! x, !! y, fill = !! x)) +
     geom_violin() +
-    scale_fill_manual(name = "Guest star", values = c("#62AF67ff", "#989DCDff"),
-                      labels = c("FALSE" = "Playing an original character",
-                                 "TRUE" = "Playing themselves")) +
+    scale_fill_manual(name = "Guest star", values = colors[3:4], 
+                      labels = c("FALSE" = "Playing an original character", "TRUE" = "Playing themselves")) +
     scale_x_discrete(labels = c("FALSE" = "", "TRUE" = "")) +
     labs(x = "", y = ylab, title = title)  +
     stat_summary(fun.data = data_summary, geom = "pointrange", color = "black",
@@ -724,11 +719,11 @@ plot_violin <- function(df, x, y, ylab, title = "", limits = NULL,
   p
 }
 
-plot.guest.rating <- episodes %>%
+plot.guest.ratings <- episodes %>%
   plot_violin(x = self, y = rating, ylab = "Rating score", title = "IMDb ratings",
               limits = c(1, 10), breaks = seq(0, 10, 2))
 
-plot.guest.vote <- episodes %>%
+plot.guest.votes <- episodes %>%
   plot_violin(x = self, y = votes, ylab = "Number of votes", title = "IMDb votes",
               labels = comma, limits = c(0, 4000))
 
@@ -737,7 +732,7 @@ plot.guest.views <- episodes %>%
               labels = unit_format(unit = "", scale = 1e+6, big.mark = ","),
               limits = c(0, 35))
 
-ggarrange(plot.guest.rating, plot.guest.vote, plot.guest.views, nrow = 1, common.legend = TRUE,
+ggarrange(plot.guest.ratings, plot.guest.votes, plot.guest.views, nrow = 1, common.legend = TRUE,
              legend="bottom", widths = c(0.95, 0.97, 1.08))
 ```
 
@@ -826,8 +821,8 @@ bigram_united <- dialogue_filtered %>%
 
 bigram_united %>%
   count(bigram, sort = TRUE) %>%
-  show_table(head = 10, col.names = c("Bigram", "Frequency"),
-             caption = "Top 10 bigrams throughout 26 seasons", align = c("l", "r"))
+  show_table(head = 10, col.names = c("Bigram", "Frequency"), align = c("l", "r"),
+             caption = "Top 10 bigrams throughout 26 seasons")
 ```
 
 
@@ -844,8 +839,7 @@ bigram_tf_idf <- bigram_united %>%
 bigram_tf_idf %>%
   filter(n > 50) %>%
   distinct(role, .keep_all = TRUE) %>%
-  show_table(col.names = c("Character", "Bigram", "Frequency", "tf", "idf", "tf-idf"),
-             align = c("l", rep("r", 5)),
+  show_table(col.names = c("Character", "Bigram", "Frequency", "tf", "idf", "tf-idf"), align = c("l", rep("r", 5)),
              caption = "Peculiar bigrams occurring over 50 times throughout 26 seasons")
 ```
 
@@ -864,8 +858,7 @@ set.seed(1234)
 a <- grid::arrow(type = "closed", length = unit(.15, "inches"))
 
 ggraph(bigram.graph, layout = "fr") +
-  geom_edge_link(aes(edge_alpha = n), show.legend = FALSE,
-                 arrow = a, end_cap = circle(.07, "inches")) +
+  geom_edge_link(aes(edge_alpha = n), show.legend = FALSE, arrow = a, end_cap = circle(.07, "inches")) +
   geom_node_point(color = "lightblue", size = 5) +
   geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
   theme_void()
@@ -945,7 +938,7 @@ Let us now have a look at some word clouds, which give us an idea of the most re
 
 ```{r wordcloud_global, fig.height=6, out.width="400", out.height="600"}
 plot_wordcloud <- function(df, x, y, head = TRUE, head.size = 50,
-                           shape = diamond, max.size = 20){
+                           shape = "diamond", max.size = 20){
 
   x <- enquo(x)
   y <- enquo(y)
@@ -956,9 +949,8 @@ plot_wordcloud <- function(df, x, y, head = TRUE, head.size = 50,
   }
 
   df %>%
-    ggplot(aes(label = !! x, size = !! y,
-               color =  factor(sample.int(10, length(!! x), replace = TRUE))),
-               shape = shape) +
+    ggplot(aes(label = !! x, size = !! y, shape = shape,
+               color =  factor(sample.int(10, length(!! x), replace = TRUE)))) +
     geom_text_wordcloud(rm_outside = TRUE) +
     scale_size_area(max_size = max.size)
 }
@@ -992,7 +984,7 @@ dialogues.tidy %>%
   mutate(prop = n() / sum(n())) %>%
   ungroup() %>%
   mutate(role = reorder(role, -n, sum)) %>%
-  plot_wordcloud(x = word, y = abs(prop), head = FALSE, shape = circle, max.size = 5) +
+  plot_wordcloud(x = word, y = abs(prop), head = FALSE, shape = "circle", max.size = 5) +
   facet_wrap(~role)
 ```
 
@@ -1037,7 +1029,7 @@ simpsons_topics %>%
   facet_wrap(~topic, scales = "free") +
   coord_flip() +
   scale_x_reordered() +
-  scale_fill_manual(values = c("#62AF67ff", "#989DCDff")) +
+  scale_fill_manual(values = colors[3:4]) +
   labs(x = "Term", y = "Beta")
 ```
 
