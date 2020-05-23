@@ -76,6 +76,9 @@ img.image-thumb {
 
 img.image-lb {
   cursor: pointer;
+  display: block;       /* display, margin left and margin right : to center the image */
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .figure {
@@ -424,7 +427,7 @@ dl dd{
         background:rgba(0,0,0,0.05)}
 
     #content{
-        background:#fcfcfc}
+        background:#ffffff}
 }
 
 
@@ -481,7 +484,7 @@ code{
 }
 
 #content div.sourceCode {
-  background: #fcfcfc;
+  background: #ffffff;
 }
 
 .table-wrapper {
