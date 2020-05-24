@@ -76,7 +76,7 @@ img.image-thumb {
 
 img.image-lb {
   cursor: pointer;
-  display: block;       /* display, margin left and margin right : to center the image */
+  display: block;       /* centered images */
   margin-left: auto;
   margin-right: auto;
 }
@@ -171,7 +171,7 @@ html{
     overflow-x:hidden;
 }
 
-body{                        /*  up here */
+body{                        
     background:#edf0f2;
     color:#404040;
    /* font-family:"Lato","proxima-nova","Helvetica Neue",Arial,sans-serif; */
