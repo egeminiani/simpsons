@@ -1,8 +1,8 @@
 # Exploring The Simpsons Show
 
-<img style="float: right;width: 50px;height: 50px" src="Images/simpsons_image.png">
-
 This repository dives deep into the world of [The Simpsons](https://en.wikipedia.org/wiki/The_Simpsons). We use the data sets available at the data science platform [Kaggle](https://www.kaggle.com/prashant111/the-simpsons-dataset) and the \#tidytuesday [Github repository](https://github.com/rfordatascience/tidytuesday/tree/master/data/2019/2019-08-27), which contain a variety of information on the show, including script lines, IMDb ratings, TV views, guest star appearances, and much more.
+
+<img src="Images/simpsons_image.png" width = "150">
 
 ## Description
 
