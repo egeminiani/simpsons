@@ -988,7 +988,7 @@ dialogues.tidy %>%
 
 ## Topic Modelling
 
-We conclude this analysis with some topic modelling. To this end, we need to construct the term document matrix of `dialogues`. It turns out that considering the show episodes as documents does not provide much insight, as the episodes tend to share common themes. Therefore, we consider as a document the lines pronounced by a certain character.
+We conclude this analysis with some topic modelling. To this end, we need to construct the term document matrix of `dialogues`. It turns out that considering the show episodes as documents does not provide much insight, as each episode touches on various topics. Therefore, we consider as a document the lines pronounced by a certain character.
 
 To get more meaningful results, when constructing the document term matrix, we only keep the words occurring at least 10 times, and whose tf-idf is higher than the 70% quantile.
 
@@ -1075,7 +1075,7 @@ topic4 <- "The meaningful words of this topic ('homie', 'honey', and 'husband') 
 
 topic5 <- "The words 'lisa', and 'milhouse' possibly hint to **kid-related topics**. The top characters include Lisa, Milhouse, young Karl, and young Lenny."
 
-topic6 <- "We read 'marge', 'boy', 'bart', 'lisa', 'stupid', and 'flanders', and we can't help thinking about **Homer**! Homer is, of course, the main character of this topic, followed by other secondary characters."
+topic6 <- "We read 'marge', 'boy', 'bart', 'lisa', 'stupid', and 'flanders', and we can't help thinking about **Homer's world**! Homer is, of course, the main character of this topic, followed by other secondary characters."
 
 topic7 <- "We can be confident that the words 'cool', 'krusty', 'boys', and 'milhouse' revolve around the **social life of Bart Simpson**. Besides Bart, the other main characters are his bully friends Nelson, Jimbo, and Kearney, the recidivist criminal Snake Jailbird, and the drug-addict bus-driver Otto Man. What a crew!"
 
