@@ -91,7 +91,7 @@ guests     <- read_delim("https://raw.githubusercontent.com/rfordatascience/tidy
                          delim = "|", quote = "")
 ```
 
-<img style="float: right;width: 120px;" src="Images/wrench2.png">
+<img style="float: right;width: 120px;" src="Images/wrench.png">
 &nbsp;
 
 # Pre-processing {.tabset  .tabset-pills}
