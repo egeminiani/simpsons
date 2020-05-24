@@ -74,10 +74,11 @@ firstup <- function(x) {
 }
 
 colors  <- c('#0094c7', '#f14e28', "#62AF67ff", "#989DCDff")
-palette <- c("#acba81ff", "#2a9430ff", "#ae6b1bff","#024CF0", "#28536bff", "#68aedeff", "#8928e8ff","#f25d30ff",
-             "#d63d2aff", "orchid", "#b49ba0ff", "darkorange", "#ef4d8bff", "#ffc510ff", "lightsalmon1", "azure4",
-             "aquamarine3")
-palette2 <- c("#6891AB", "#81d2c7ff", "#63D676", "#ffe579ff", "#ffaa60ff", "#ffc09fff", "#f994b6ff", "#b892ffff")
+palette <- c("#acba81ff", "#2a9430ff", "#ae6b1bff","#024CF0", "#28536bff", "#68aedeff", "#8928e8ff",
+             "#f25d30ff", "#d63d2aff", "orchid", "#b49ba0ff", "darkorange", "#ef4d8bff", "#ffc510ff", 
+             "lightsalmon1", "azure4", "aquamarine3")
+palette2 <- c("#6891AB", "#81d2c7ff", "#63D676", "#ffe579ff", "#ffaa60ff", "#ffc09fff", "#f994b6ff", 
+              "#b892ffff")
 ```
 
 The five data sets we will be working with are `simpsons_characters.csv`, `simpsons_locations.csv`, `simpsons_script_lines.csv`, `simpsons_episodes.csv`, and `simpsons-guests.csv`. 
@@ -87,8 +88,7 @@ characters <- read_delim("Data/simpsons_characters.csv", delim = ",")
 locations  <- read_delim("Data/simpsons_locations.csv", delim = ",")
 episodes   <- read_delim("Data/simpsons_episodes.csv", delim = ",")
 dialogues  <- read_delim("Data/simpsons_script_lines.csv", delim = ",")
-guests     <- read_delim("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-08-27/simpsons-guests.csv", 
-                         delim = "|", quote = "")
+guests     <- read_delim("Data/simpsons-guests.csv", delim = "|", quote = "")
 ```
 
 <img style="float: right;width: 120px;" src="Images/wrench.png">

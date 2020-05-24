@@ -10,7 +10,7 @@ The repository contains a notebook illustrating exploratory and text analyses of
 
 * **Exploratory data analysis**: this allows us to discover, among other things, the most popular characters, the locations where they usually interact, how the ratings and views have evolved across almost 30 seasons, and whether the appearance of guest stars has had any impact on the show ratings.
 
-* **Text analysis**: the availability of the script lines allows up to plunge into The Simpsons' world, and investigate the most recurrent and peculiar (as measured by tf-idf) words and bigrams, and the underlying sentiments. Thanks to Latent Dirichlet Allocation (LDA) analysis, we uncovered the main topics of the series, which include social life, family, school, and work relationships.
+* **Text analysis**: the availability of the script lines allows up to plunge into The Simpsons' world, and investigate the most recurrent and peculiar (as measured by tf-idf) words and bigrams, and the underlying sentiments. Through a Latent Dirichlet Allocation (LDA) analysis, we can uncover the main topics of the show, such as family, school, social life, and work relationships.
 
 ## Usage
 
@@ -18,9 +18,9 @@ The analysis code is contained in the R Markdown report `exploring-simpsons.Rmd`
 
 If you just what to have a look at the rendered notebook, please refer to `exploring-simpsons.html`.
 
-Changes to the HTML outlook of the report can be carried out by editing the custom.css file, which has been taken modified from the [`readthedown` format](https://github.com/juba/rmdformats).
+The HTML outlook of the report can be changed by editing the `custom.css` file, which is itself a modified version of the [`readthedown` format](https://github.com/juba/rmdformats).
 
-All the data sets employed for the analyses have been collected for convenience in the `Data/` folder.
+All the data sets employed for the analyses are collected for convenience in the `Data` folder.
 
 ## Other
 
