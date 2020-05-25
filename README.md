@@ -6,7 +6,7 @@ This repository dives deep into the world of [The Simpsons](https://en.wikipedia
 
 ## Description
 
-The repository contains a notebook illustrating exploratory and text analyses of the resources above. In particular,
+The repository contains a report illustrating exploratory and text analyses of the resources above. In particular,
 
 * **Exploratory data analysis**: this allows us to discover, among other things, the most popular characters, the locations where they usually interact, how the ratings and views have evolved across almost 30 seasons, and whether the appearance of guest stars has had any impact on the show ratings.
 
@@ -25,3 +25,5 @@ All the data sets employed for the analyses are collected for convenience in the
 ## Other
 
 Suggestions and feedback are welcome!
+
+Link to notebook on Kaggle: [https://www.kaggle.com/elenageminiani/exploring-the-simpsons-show](https://www.kaggle.com/elenageminiani/exploring-the-simpsons-show).
